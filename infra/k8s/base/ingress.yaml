@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: marketing-platform-ingress
+  namespace: marketing-platform
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Required for SSE streaming — prevents nginx from buffering the response
+    # until the stream closes, which would defeat real-time token delivery.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # TLS managed by cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.activelab.com
+      secretName: marketing-platform-tls
+  rules:
+    - host: api.activelab.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80

@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: marketing-platform
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      serviceAccountName: marketing-platform-backend
+      initContainers:
+        # Run Alembic migrations before the app starts on every deploy.
+        # Migrations are idempotent — safe to run on every pod start.
+        - name: migrate
+          image: us-central1-docker.pkg.dev/activelab-mktg-platform/marketing-platform/backend:latest
+          command: ["python", "-m", "alembic", "-c", "migrations/alembic.ini", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: database-url
+      containers:
+        - name: backend
+          image: us-central1-docker.pkg.dev/activelab-mktg-platform/marketing-platform/backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: database-url
+            # Auth
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: secret-key
+            - name: INITIAL_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: initial-admin-token
+                  optional: true
+            # Admin
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: admin-token
+            # Application
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: app-url
+            # GitHub Bridge
+            - name: GITHUB_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: github-token-encryption-key
+            # GCS
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: gcs-bucket-name
+            # SMTP
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-host
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-port
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-user
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-pass
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-from
+            # AI / RAG
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: anthropic-api-key
+            - name: VOYAGE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: voyage-api-key
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+        # Cloud SQL Auth Proxy sidecar — exposes Cloud SQL on localhost:5432
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          args:
+            - "--port=5432"
+            - "activelab-mktg-platform:us-central1:marketing-platform-db"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

@@ -1,19 +1,18 @@
 # Specification: Marketing Content-as-Code Platform (MVP)
 
 ## 1. Goal
-Provide a multitenant platform where marketing teams manage content via version control, with an AI agent to assist in distribution and interrogation.
+Provide a single-organization platform where marketing teams manage content via version control, with an AI agent to assist in distribution and interrogation. Each client deployment runs as an isolated Docker image — one installation per client, eliminating multitenancy overhead and giving clients full deployment flexibility.
 
 ## 2. Core Architecture
-- **Multitenancy:** Single Postgres Database using Row-Level Security (RLS).
-- **Isolation Logic:** Every session must set the `app.current_tenant_id` session variable before executing queries.
+- **Deployment Model:** Per-client Docker image. Each client gets their own isolated container and database. Clients can self-host or have the platform operator host on their behalf.
 - **Backend:** Python-based, utilizing FastAPI for the interface.
-- **Deployment:** Containerized (Docker) for GCP Cloud Run.
+- **Database:** Postgres, single-organization (no RLS, no tenant scoping required).
 
 ## 3. MVP Features
-- **Tenant Onboarding:** A script to create a `tenant_id` and initialize their scoped schema access.
+- **Admin Setup:** Initial administrator registration to bootstrap the installation.
 - **Content Sync:** A version control integration (GitHub/Git) to pull content into the platform.
-- **Agent Interrogation:** A GPT-style interface to "Ask your data" (using your Snowflake-to-Postgres sync foundation).
+- **Agent Interrogation:** A conversational interface to query and generate from the organization's approved content library.
 
 ## 4. Security
-- RLS Policy must block any access where `tenant_id` does not match the session context.
+- All endpoints that access application data must require an authenticated session.
 - No PII (Personally Identifiable Information) shall be stored in plaintext.

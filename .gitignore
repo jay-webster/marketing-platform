@@ -1,4 +1,27 @@
+# Environment
 .env
+.env.*
+!.env.example
+
+# Python
 .venv/
-data/
+venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Data / local state
+data/
+
+# Secrets — never commit real values
+infra/k8s/base/secrets.yaml
+
+# OS
+.DS_Store
+Thumbs.db
