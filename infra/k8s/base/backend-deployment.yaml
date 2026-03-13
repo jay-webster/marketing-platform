@@ -28,6 +28,31 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: database-url
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: secret-key
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: app-url
+            - name: GITHUB_TOKEN_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: github-token-encryption-key
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-host
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: smtp-from
       containers:
         - name: backend
           image: us-central1-docker.pkg.dev/activelab-mktg-platform/marketing-platform/backend:latest
