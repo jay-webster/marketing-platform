@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 # Per-request tenant context — safe for both threaded and async (asyncio) runtimes.
 # The middleware sets this at the start of every request; it is automatically
 # isolated per-task/coroutine, so there is no cross-request leakage.
-_current_tenant_id: ContextVar[str | None] = ContextVar("current_tenant_id", default=None)
+_current_tenant_id: ContextVar[str | None] = ContextVar(
+    "current_tenant_id", default=None
+)
 
 
 def set_tenant_context(tenant_id: str) -> Token:
@@ -42,6 +44,7 @@ def reset_tenant_context(token: Token) -> None:
 def get_tenant_context() -> str | None:
     """Return the tenant_id bound to the current request context, or None."""
     return _current_tenant_id.get()
+
 
 _pool: ThreadedConnectionPool | None = None
 
@@ -62,7 +65,9 @@ def _get_pool() -> ThreadedConnectionPool:
         print(f"Connected to database: {conn.info.dbname}")
 
         _pool = ThreadedConnectionPool(min_conn, max_conn, dsn=_build_dsn())
-        logger.info("Postgres connection pool initialised (min=%d, max=%d).", min_conn, max_conn)
+        logger.info(
+            "Postgres connection pool initialised (min=%d, max=%d).", min_conn, max_conn
+        )
     return _pool
 
 

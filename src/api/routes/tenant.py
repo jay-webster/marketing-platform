@@ -32,7 +32,7 @@ import psycopg2
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, HttpUrl
 
-from utils import postgres_manager
+from ..utils import postgres_manager
 
 logger = logging.getLogger(__name__)
 
