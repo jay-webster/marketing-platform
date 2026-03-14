@@ -216,8 +216,7 @@ async def connect_repository(
         db,
         action="github_connected",
         actor_id=current_user.id,
-        target_id=connection.id,
-        metadata={"repository_url": body.repository_url},
+        metadata={"repository_url": body.repository_url, "connection_id": str(connection.id)},
     )
     await db.commit()
     await db.refresh(connection)
@@ -304,8 +303,7 @@ async def rotate_token(
         db,
         action="github_token_rotated",
         actor_id=current_user.id,
-        target_id=connection.id,
-        metadata={"repository_url": connection.repository_url},
+        metadata={"repository_url": connection.repository_url, "connection_id": str(connection.id)},
     )
     await db.commit()
     await db.refresh(connection)
@@ -338,8 +336,7 @@ async def disconnect(
         db,
         action="github_disconnected",
         actor_id=current_user.id,
-        target_id=connection.id,
-        metadata={"repository_url": connection.repository_url},
+        metadata={"repository_url": connection.repository_url, "connection_id": str(connection.id)},
     )
     await db.commit()
 
@@ -392,7 +389,6 @@ async def run_scaffold(
         db,
         action="github_scaffolded",
         actor_id=current_user.id,
-        target_id=run.id,
         metadata={
             "outcome": outcome,
             "folders_created": folders_created,
