@@ -140,7 +140,7 @@ async def test_submit_batch_happy_path(
     assert data["source_folder_name"] == "Q1 Campaigns"
     assert data["total_documents"] == 1
     assert len(data["documents"]) == 1
-    assert data["documents"][0]["processing_status"] == "queued"
+    assert data["documents"][0]["processing_status"] == "pending_approval"
     assert data["documents"][0]["original_filename"] == "report.pdf"
 
 
