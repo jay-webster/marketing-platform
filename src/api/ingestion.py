@@ -18,10 +18,11 @@ from src.models.ingestion_document import IngestionDocument, ProcessingStatus
 from src.models.knowledge_base_document import KBIndexStatus, KnowledgeBaseDocument
 from src.models.processed_document import ProcessedDocument, ReviewStatus
 from utils.audit import write_audit
-from utils.auth import get_current_user
+from src.models.user import Role, User
+from utils.auth import get_current_user, require_role
 from utils.db import get_db
 from utils.extractors import SUPPORTED_EXTENSIONS
-from utils.gcs import upload_to_gcs
+from utils.gcs import delete_from_gcs, upload_to_gcs
 
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
@@ -135,6 +136,13 @@ async def submit_batch(
                 },
             )
 
+    # Admins bypass approval; all other roles submit for review
+    initial_status = (
+        ProcessingStatus.QUEUED.value
+        if current_user.role == Role.ADMIN.value
+        else ProcessingStatus.PENDING_APPROVAL.value
+    )
+
     # Create batch
     batch = IngestionBatch(
         submitted_by=current_user.id,
@@ -167,7 +175,7 @@ async def submit_batch(
             relative_path=f.filename or "file",
             file_size_bytes=f.size or 0,
             gcs_object_path=gcs_path,
-            processing_status=ProcessingStatus.QUEUED.value,
+            processing_status=initial_status,
         )
         db.add(doc)
         documents.append(doc)
@@ -177,7 +185,11 @@ async def submit_batch(
         "ingestion_batch_submitted",
         actor_id=current_user.id,
         target_id=batch.id,
-        metadata={"total_documents": len(files), "source_folder_name": folder_name},
+        metadata={
+            "total_documents": len(files),
+            "source_folder_name": folder_name,
+            "initial_status": initial_status,
+        },
     )
     await db.commit()
 
@@ -522,3 +534,130 @@ async def export_batch(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="batch_{batch_id}.zip"'},
     )
+
+
+# -----------------------------------------------------------------
+# GET /pending — Admin: list all documents awaiting approval
+# -----------------------------------------------------------------
+
+@router.get("/pending", dependencies=[require_role(Role.ADMIN)])
+async def list_pending_documents(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(
+            IngestionDocument,
+            User.display_name,
+        )
+        .join(IngestionBatch, IngestionBatch.id == IngestionDocument.batch_id)
+        .join(User, User.id == IngestionBatch.submitted_by)
+        .where(IngestionDocument.processing_status == ProcessingStatus.PENDING_APPROVAL.value)
+        .order_by(IngestionDocument.queued_at)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    data = [
+        {
+            **_doc_response(doc),
+            "batch_id": str(doc.batch_id),
+            "submitted_by_name": display_name,
+        }
+        for doc, display_name in rows
+    ]
+
+    return {
+        "data": data,
+        "total": len(data),
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# POST /documents/{doc_id}/approve — Admin: approve pending document
+# -----------------------------------------------------------------
+
+@router.post("/documents/{doc_id}/approve", dependencies=[require_role(Role.ADMIN)])
+async def approve_document(
+    request: Request,
+    doc_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await db.get(IngestionDocument, doc_id)
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "Document not found", "code": "DOCUMENT_NOT_FOUND", "request_id": _request_id(request)},
+        )
+    if doc.processing_status != ProcessingStatus.PENDING_APPROVAL.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "Document is not pending approval", "code": "DOCUMENT_NOT_PENDING", "request_id": _request_id(request)},
+        )
+
+    doc.processing_status = ProcessingStatus.QUEUED.value
+    doc.queued_at = datetime.now(timezone.utc)
+
+    await write_audit(
+        db,
+        "ingestion_document_approved",
+        actor_id=current_user.id,
+        target_id=doc_id,
+        metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename},
+    )
+    await db.commit()
+
+    return {
+        "data": {"id": str(doc.id), "processing_status": doc.processing_status},
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# POST /documents/{doc_id}/reject — Admin: reject and delete pending document
+# -----------------------------------------------------------------
+
+@router.post("/documents/{doc_id}/reject", dependencies=[require_role(Role.ADMIN)])
+async def reject_document(
+    request: Request,
+    doc_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await db.get(IngestionDocument, doc_id)
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "Document not found", "code": "DOCUMENT_NOT_FOUND", "request_id": _request_id(request)},
+        )
+    if doc.processing_status != ProcessingStatus.PENDING_APPROVAL.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "Document is not pending approval", "code": "DOCUMENT_NOT_PENDING", "request_id": _request_id(request)},
+        )
+
+    gcs_path = doc.gcs_object_path
+    doc.processing_status = ProcessingStatus.REJECTED.value
+
+    await write_audit(
+        db,
+        "ingestion_document_rejected",
+        actor_id=current_user.id,
+        target_id=doc_id,
+        metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename},
+    )
+    await db.commit()
+
+    # Delete staged GCS file after committing status (best-effort)
+    try:
+        await delete_from_gcs(settings.GCS_BUCKET_NAME, gcs_path)
+    except Exception:
+        pass  # GCS cleanup failure does not affect the rejection result
+
+    return {
+        "data": {"id": str(doc.id), "processing_status": doc.processing_status},
+        "request_id": _request_id(request),
+    }

@@ -1,21 +1,41 @@
 import { getUser } from "@/lib/dal"
 import { UploadZone } from "@/components/ingestion/UploadZone"
 import { JobTable } from "@/components/ingestion/JobTable"
+import { PendingApprovalTable } from "@/components/ingestion/PendingApprovalTable"
 
 export default async function IngestionPage() {
-  await getUser()
+  const user = await getUser()
+  const isAdmin = user.role === "admin"
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Document Ingestion</h1>
         <p className="text-muted-foreground mt-1">
-          Upload documents to process and add to your knowledge base
+          {isAdmin
+            ? "Upload documents or review submissions from your team"
+            : "Submit documents to add to your knowledge base — an admin will review before processing"}
         </p>
       </div>
-      <UploadZone />
+
+      {isAdmin && (
+        <div>
+          <h2 className="text-base font-semibold mb-3">Pending Approval</h2>
+          <PendingApprovalTable />
+        </div>
+      )}
+
       <div>
-        <h2 className="text-base font-semibold mb-3">Processing Jobs</h2>
+        <h2 className="text-base font-semibold mb-3">
+          {isAdmin ? "Upload a Document" : "Submit a Document"}
+        </h2>
+        <UploadZone userRole={user.role} />
+      </div>
+
+      <div>
+        <h2 className="text-base font-semibold mb-3">
+          {isAdmin ? "All Processing Jobs" : "My Submissions"}
+        </h2>
         <JobTable />
       </div>
     </div>

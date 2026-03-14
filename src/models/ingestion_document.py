@@ -10,10 +10,12 @@ from .base import Base
 
 
 class ProcessingStatus(str, enum.Enum):
-    QUEUED = "queued"
+    PENDING_APPROVAL = "pending_approval"  # non-admin upload awaiting admin approval
+    QUEUED = "queued"                      # approved/admin upload, ready for worker
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    REJECTED = "rejected"                  # admin rejected; GCS file deleted
 
 
 class IngestionDocument(Base):

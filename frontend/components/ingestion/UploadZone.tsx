@@ -24,7 +24,8 @@ const API_URL =
     ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
     : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
 
-export function UploadZone() {
+export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
+  const isAdmin = userRole === "admin"
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -66,8 +67,13 @@ export function UploadZone() {
         throw new Error(body.detail ?? `Upload failed (${res.status})`)
       }
 
-      toast.success(`${file.name} queued for processing`)
+      if (isAdmin) {
+        toast.success(`${file.name} queued for processing`)
+      } else {
+        toast.success(`${file.name} submitted for admin review`)
+      }
       queryClient.invalidateQueries({ queryKey: ["ingestion-batches"] })
+      queryClient.invalidateQueries({ queryKey: ["pending-approvals"] })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed")
     } finally {
@@ -102,10 +108,11 @@ export function UploadZone() {
       >
         <Upload className="h-8 w-8 text-muted-foreground mb-3" />
         <p className="text-sm font-medium mb-1">
-          {isUploading ? "Uploading…" : "Drag & drop a file here"}
+          {isUploading ? (isAdmin ? "Uploading…" : "Submitting…") : "Drag & drop a file here"}
         </p>
         <p className="text-xs text-muted-foreground mb-4">
           PDF, DOCX, PPTX, CSV, TXT, or Markdown — max 50 MB
+          {!isAdmin && <span className="block mt-0.5 text-amber-600">Uploads are reviewed by an admin before processing</span>}
         </p>
         <Button
           variant="outline"
@@ -113,7 +120,7 @@ export function UploadZone() {
           disabled={isUploading}
           onClick={() => inputRef.current?.click()}
         >
-          Browse files
+          {isAdmin ? "Browse files" : "Submit for review"}
         </Button>
         <input
           ref={inputRef}

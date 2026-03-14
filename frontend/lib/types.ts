@@ -39,19 +39,37 @@ export interface ContentListResponse {
 }
 
 // Ingestion
-export type JobStatus = "queued" | "processing" | "complete" | "failed";
+export type JobStatus =
+  | "pending_approval"  // non-admin upload awaiting admin review
+  | "queued"            // approved / admin upload, waiting for worker
+  | "processing"
+  | "completed"         // note: backend uses "completed", not "complete"
+  | "failed"
+  | "rejected";         // admin rejected; GCS file deleted
 
 export interface IngestionJob {
   id: string;
-  file_name: string;
-  status: JobStatus;
+  original_filename: string;
+  processing_status: JobStatus;
   failure_reason: string | null;
-  created_at: string;
-  updated_at: string;
+  queued_at: string;
+  batch_id?: string;
+}
+
+// Extended shape returned by GET /api/v1/ingestion/pending (admin only)
+export interface PendingDocument extends IngestionJob {
+  batch_id: string;
+  submitted_by_name: string;
+  submitted_by_id: string;
 }
 
 export interface IngestionListResponse {
   data: IngestionJob[];
+  total: number;
+}
+
+export interface PendingDocumentListResponse {
+  data: PendingDocument[];
   total: number;
 }
 

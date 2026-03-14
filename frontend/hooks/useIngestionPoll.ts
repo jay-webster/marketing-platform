@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { apiGet } from "@/lib/api"
 import type { IngestionListResponse, IngestionJob, JobStatus } from "@/lib/types"
 
-const ACTIVE_STATUSES: JobStatus[] = ["queued", "processing"]
+const ACTIVE_STATUSES: JobStatus[] = ["pending_approval", "queued", "processing"]
 
 function hasActiveJobs(data: IngestionListResponse | undefined): boolean {
   return (data?.data ?? []).some((job) =>
@@ -20,5 +20,5 @@ export function useIngestionPoll() {
       hasActiveJobs(query.state.data) ? 3000 : false,
   })
 
-  return { jobs: data?.data ?? [] as IngestionJob[], isLoading }
+  return { jobs: (data?.data ?? []) as IngestionJob[], isLoading }
 }

@@ -18,17 +18,26 @@ const STATUS_VARIANTS: Record<
   JobStatus,
   "default" | "secondary" | "destructive" | "outline"
 > = {
+  pending_approval: "outline",
   queued: "outline",
   processing: "secondary",
-  complete: "default",
+  completed: "default",
   failed: "destructive",
+  rejected: "outline",
 }
 
 const STATUS_LABELS: Record<JobStatus, string> = {
+  pending_approval: "Awaiting Review",
   queued: "Queued",
   processing: "Processing",
-  complete: "Complete",
+  completed: "Complete",
   failed: "Failed",
+  rejected: "Rejected",
+}
+
+const STATUS_CLASS: Partial<Record<JobStatus, string>> = {
+  pending_approval: "text-amber-700 border-amber-300 bg-amber-50",
+  rejected: "text-slate-500 border-slate-200 bg-slate-50",
 }
 
 export function JobTable() {
@@ -67,7 +76,7 @@ export function JobTable() {
           {jobs.map((job) => (
             <TableRow key={job.id}>
               <TableCell className="font-medium">
-                {job.file_name}
+                {job.original_filename}
                 {job.failure_reason && (
                   <p
                     className="text-xs text-destructive mt-0.5 truncate max-w-xs"
@@ -78,12 +87,15 @@ export function JobTable() {
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={STATUS_VARIANTS[job.status]}>
-                  {STATUS_LABELS[job.status]}
+                <Badge
+                  variant={STATUS_VARIANTS[job.processing_status]}
+                  className={STATUS_CLASS[job.processing_status]}
+                >
+                  {STATUS_LABELS[job.processing_status]}
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground text-sm">
-                {new Date(job.created_at).toLocaleString()}
+                {new Date(job.queued_at).toLocaleString()}
               </TableCell>
             </TableRow>
           ))}

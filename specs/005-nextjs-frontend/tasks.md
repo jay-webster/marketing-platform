@@ -145,7 +145,7 @@
 - [X] T057 Update FastAPI `src/main.py` CORS `allow_origins` — add Vercel preview domain and production domain (`https://app.activelab.com`) to `CORSMiddleware` origins list; set `allow_credentials=True` at `../src/main.py`
 - [ ] T058 Set Vercel environment variables — `NEXT_PUBLIC_API_URL=https://api.activelab.com` and `AUTH_SECRET=<strong-random>` in Vercel project dashboard
 - [ ] T059 Connect Vercel project — link `frontend/` subdirectory as Vercel project root; enable preview deploys on PR; production deploy on merge to `main`
-- [ ] T060 [P] End-to-end smoke test — login → dashboard → chat (send message, verify stream) → ingestion (upload file, verify poll) → logout; document any issues
+- [X] T060 [P] End-to-end smoke test — login → dashboard → chat (send message, verify stream) → ingestion (upload file, verify poll) → logout; document any issues
 
 ---
 
@@ -158,19 +158,19 @@
 
 ### Backend (in `../src/api/ingestion.py` relative to frontend spec)
 
-- [ ] T061 [US8] Modify batch submission in `src/api/ingestion.py` — set `initial_status = "queued" if current_user.role == "admin" else "pending_approval"`; apply to all `IngestionDocument` records created in the batch; update audit log field to record role-based routing at `../src/api/ingestion.py`
-- [ ] T062 [P] [US8] Add `GET /api/v1/ingestion/pending` to `src/api/ingestion.py` — admin-only (`require_role`); query all `IngestionDocument` where `processing_status = "pending_approval"`, join with `User` to include `submitted_by_name` (display_name); return `{ "data": [...], "total": int }` envelope at `../src/api/ingestion.py`
-- [ ] T063 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/approve` to `src/api/ingestion.py` — admin-only; set `processing_status = "queued"`, `queued_at = datetime.now(UTC)`; write audit log `ingestion_document_approved` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
-- [ ] T064 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/reject` to `src/api/ingestion.py` — admin-only; call `delete_from_gcs(doc.gcs_object_path)` to remove staged file; set `processing_status = "rejected"`; write audit log `ingestion_document_rejected` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
+- [X] T061 [US8] Modify batch submission in `src/api/ingestion.py` — set `initial_status = "queued" if current_user.role == "admin" else "pending_approval"`; apply to all `IngestionDocument` records created in the batch; update audit log field to record role-based routing at `../src/api/ingestion.py`
+- [X] T062 [P] [US8] Add `GET /api/v1/ingestion/pending` to `src/api/ingestion.py` — admin-only (`require_role`); query all `IngestionDocument` where `processing_status = "pending_approval"`, join with `User` to include `submitted_by_name` (display_name); return `{ "data": [...], "total": int }` envelope at `../src/api/ingestion.py`
+- [X] T063 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/approve` to `src/api/ingestion.py` — admin-only; set `processing_status = "queued"`, `queued_at = datetime.now(UTC)`; write audit log `ingestion_document_approved` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
+- [X] T064 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/reject` to `src/api/ingestion.py` — admin-only; call `delete_from_gcs(doc.gcs_object_path)` to remove staged file; set `processing_status = "rejected"`; write audit log `ingestion_document_rejected` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
 
 ### Frontend
 
-- [ ] T065 [US8] Update `lib/types.ts` — add `"pending_approval"` and `"rejected"` to `JobStatus`; fix `"complete"` → `"completed"` to match backend enum; add `PendingDocument` interface (`extends IngestionJob` with `batch_id`, `submitted_by_name`, `submitted_by_id`); add `PendingDocumentListResponse` at `lib/types.ts`
-- [ ] T066 [P] [US8] Update `hooks/useIngestionPoll.ts` — add `"pending_approval"` to `hasActiveJobs` status check so polling stays active while items await admin approval at `hooks/useIngestionPoll.ts`
-- [ ] T067 [P] [US8] Update `components/ingestion/UploadZone.tsx` — accept `userRole: string` prop; change submit button label to "Submit for Review" for non-admin; show "Submitted for admin review" success toast for non-admin; keep existing "Upload" label and toast for admin at `components/ingestion/UploadZone.tsx`
-- [ ] T068 [P] [US8] Create `components/ingestion/PendingApprovalTable.tsx` — admin-only client component; TanStack Query `GET /api/v1/ingestion/pending` with key `"pending-approvals"`; refetchInterval 5000; columns: File Name, Submitted By, Submitted At; per-row Approve button (`POST .../approve`) and Reject button (destructive, `POST .../reject`) with confirmation; on action invalidates `"pending-approvals"` and `"ingestion-batches"` query keys; empty state "No pending submissions" at `components/ingestion/PendingApprovalTable.tsx`
-- [ ] T069 [P] [US8] Update `components/ingestion/JobTable.tsx` — add amber/yellow badge for `pending_approval` status (label: "Awaiting Review"); add muted/slate badge for `rejected` status (label: "Rejected") at `components/ingestion/JobTable.tsx`
-- [ ] T070 [US8] Update `app/(dashboard)/ingestion/page.tsx` — convert to server component; call `getUser()` from DAL; pass `userRole={user.role}` to `<UploadZone>`; render `<PendingApprovalTable>` above `<UploadZone>` for admin only at `app/(dashboard)/ingestion/page.tsx`
+- [X] T065 [US8] Update `lib/types.ts` — add `"pending_approval"` and `"rejected"` to `JobStatus`; fix `"complete"` → `"completed"` to match backend enum; add `PendingDocument` interface (`extends IngestionJob` with `batch_id`, `submitted_by_name`, `submitted_by_id`); add `PendingDocumentListResponse` at `lib/types.ts`
+- [X] T066 [P] [US8] Update `hooks/useIngestionPoll.ts` — add `"pending_approval"` to `hasActiveJobs` status check so polling stays active while items await admin approval at `hooks/useIngestionPoll.ts`
+- [X] T067 [P] [US8] Update `components/ingestion/UploadZone.tsx` — accept `userRole: string` prop; change submit button label to "Submit for Review" for non-admin; show "Submitted for admin review" success toast for non-admin; keep existing "Upload" label and toast for admin at `components/ingestion/UploadZone.tsx`
+- [X] T068 [P] [US8] Create `components/ingestion/PendingApprovalTable.tsx` — admin-only client component; TanStack Query `GET /api/v1/ingestion/pending` with key `"pending-approvals"`; refetchInterval 5000; columns: File Name, Submitted By, Submitted At; per-row Approve button (`POST .../approve`) and Reject button (destructive, `POST .../reject`) with confirmation; on action invalidates `"pending-approvals"` and `"ingestion-batches"` query keys; empty state "No pending submissions" at `components/ingestion/PendingApprovalTable.tsx`
+- [X] T069 [P] [US8] Update `components/ingestion/JobTable.tsx` — add amber/yellow badge for `pending_approval` status (label: "Awaiting Review"); add muted/slate badge for `rejected` status (label: "Rejected") at `components/ingestion/JobTable.tsx`
+- [X] T070 [US8] Update `app/(dashboard)/ingestion/page.tsx` — convert to server component; call `getUser()` from DAL; pass `userRole={user.role}` to `<UploadZone>`; render `<PendingApprovalTable>` above `<UploadZone>` for admin only at `app/(dashboard)/ingestion/page.tsx`
 
 ---
 
