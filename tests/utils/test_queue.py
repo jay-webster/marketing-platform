@@ -178,6 +178,7 @@ async def test_process_document_marks_completed_on_success():
     mock_doc.original_filename = "file.pdf"
     mock_doc.reprocessing_note = None
     mock_doc.processing_status = "processing"
+    mock_doc.destination_folder = None  # no PR workflow; test the standard completion path
 
     # Build mock batch
     mock_batch = MagicMock()

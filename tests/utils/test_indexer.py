@@ -32,6 +32,7 @@ def _make_kb_doc(kb_doc_id, proc_doc_id):
     kb_doc.id = kb_doc_id
     kb_doc.processed_document_id = proc_doc_id
     kb_doc.index_status = KBIndexStatus.QUEUED.value
+    kb_doc.synced_document_id = None  # upload path; prevents GitHub sync branch
     return kb_doc
 
 
@@ -49,9 +50,8 @@ async def test_index_document_happy_path(kb_doc_id, proc_doc_id):
     db = _make_mock_db()
 
     # Mock the DB query returning (kb_doc, proc_doc)
-    row = MagicMock()
-    row.__iter__ = MagicMock(return_value=iter([kb_doc, proc_doc]))
     result_mock = MagicMock()
+    result_mock.scalar_one_or_none = MagicMock(return_value=kb_doc)
     result_mock.one_or_none = MagicMock(return_value=(kb_doc, proc_doc))
 
     db.execute.return_value = result_mock
@@ -89,6 +89,7 @@ async def test_index_document_empty_content(kb_doc_id, proc_doc_id):
     db = _make_mock_db()
 
     result_mock = MagicMock()
+    result_mock.scalar_one_or_none = MagicMock(return_value=kb_doc)
     result_mock.one_or_none = MagicMock(return_value=(kb_doc, proc_doc))
     db.execute.return_value = result_mock
 
@@ -119,6 +120,7 @@ async def test_index_document_embed_failure(kb_doc_id, proc_doc_id):
     db = _make_mock_db()
 
     result_mock = MagicMock()
+    result_mock.scalar_one_or_none = MagicMock(return_value=kb_doc)
     result_mock.one_or_none = MagicMock(return_value=(kb_doc, proc_doc))
     db.execute.return_value = result_mock
 
