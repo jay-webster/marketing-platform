@@ -69,7 +69,7 @@ export function AdminDashboard() {
   })
 
   const pendingJobs = jobs?.data.filter(
-    (j) => j.status === "queued" || j.status === "processing"
+    (j) => j.processing_status === "queued" || j.processing_status === "processing"
   ).length
 
   return (
