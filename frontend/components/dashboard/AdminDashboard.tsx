@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { ContentListResponse, IngestionListResponse, ChatSessionListResponse } from "@/lib/types"
+import type { BatchSummary, ChatSession } from "@/lib/types"
 
 function StatCard({
   title,
@@ -51,26 +51,23 @@ function StatCard({
 }
 
 export function AdminDashboard() {
-  const { data: content, isLoading: contentLoading } = useQuery({
-    queryKey: ["content-count"],
+  const { data: kbStatus, isLoading: contentLoading } = useQuery({
+    queryKey: ["kb-status"],
     queryFn: () =>
-      apiGet<ContentListResponse>("/api/v1/ingestion/documents?limit=1"),
+      apiGet<{ total: number; by_status: Record<string, number> }>("/api/v1/knowledge-base/status"),
   })
 
   const { data: jobs, isLoading: jobsLoading } = useQuery({
     queryKey: ["ingestion-count"],
-    queryFn: () => apiGet<IngestionListResponse>("/api/v1/ingestion/batches"),
+    queryFn: () => apiGet<BatchSummary[]>("/api/v1/ingestion/batches"),
   })
 
   const { data: sessions, isLoading: sessionsLoading } = useQuery({
     queryKey: ["sessions-count"],
-    queryFn: () =>
-      apiGet<ChatSessionListResponse>("/api/v1/chat/sessions?limit=1"),
+    queryFn: () => apiGet<ChatSession[]>("/api/v1/chat/sessions"),
   })
 
-  const pendingJobs = (jobs?.data ?? []).filter(
-    (j) => j.processing_status === "queued" || j.processing_status === "processing"
-  ).length
+  const activeBatches = (jobs ?? []).filter((j) => j.status === "in_progress").length
 
   return (
     <div className="p-6 space-y-6">
@@ -84,15 +81,15 @@ export function AdminDashboard() {
           description="Total documents in knowledge base"
           href="/content"
           icon={FileText}
-          value={content?.total}
+          value={kbStatus?.total}
           isLoading={contentLoading}
         />
         <StatCard
-          title="Pending Jobs"
-          description="Documents currently processing"
+          title="Active Jobs"
+          description="Batches currently processing"
           href="/ingestion"
           icon={Upload}
-          value={pendingJobs}
+          value={activeBatches}
           isLoading={jobsLoading}
         />
         <StatCard
@@ -100,7 +97,7 @@ export function AdminDashboard() {
           description="Total conversation sessions"
           href="/chat"
           icon={MessageSquare}
-          value={sessions?.total}
+          value={sessions?.length}
           isLoading={sessionsLoading}
         />
       </div>

@@ -14,12 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { InviteDialog } from "./InviteDialog"
-import type { UserListResponse, Invitation, UserRole } from "@/lib/types"
-
-interface InvitationListResponse {
-  data: Invitation[]
-  total: number
-}
+import type { User, Invitation, UserRole } from "@/lib/types"
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -44,12 +39,12 @@ function LoadingRows() {
 export function UserTable() {
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ["users"],
-    queryFn: () => apiGet<UserListResponse>("/api/v1/users"),
+    queryFn: () => apiGet<User[]>("/api/v1/users"),
   })
 
   const { data: invitationsData, isLoading: invitationsLoading } = useQuery({
     queryKey: ["invitations"],
-    queryFn: () => apiGet<InvitationListResponse>("/api/v1/users/invitations"),
+    queryFn: () => apiGet<Invitation[]>("/api/v1/users/invitations"),
   })
 
   return (
@@ -65,7 +60,7 @@ export function UserTable() {
             Active Users
             {usersData && (
               <span className="ml-1.5 text-xs text-muted-foreground">
-                ({usersData.total})
+                ({usersData.length})
               </span>
             )}
           </TabsTrigger>
@@ -73,7 +68,7 @@ export function UserTable() {
             Pending Invitations
             {invitationsData && (
               <span className="ml-1.5 text-xs text-muted-foreground">
-                ({invitationsData.data.filter((i) => i.status === "pending").length})
+                ({invitationsData.filter((i) => i.status === "pending").length})
               </span>
             )}
           </TabsTrigger>
@@ -93,7 +88,7 @@ export function UserTable() {
               </TableHeader>
               <TableBody>
                 {usersLoading && <LoadingRows />}
-                {usersData?.data.map((user) => (
+                {usersData?.map((user) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       {user.display_name}
@@ -138,7 +133,7 @@ export function UserTable() {
               </TableHeader>
               <TableBody>
                 {invitationsLoading && <LoadingRows />}
-                {invitationsData?.data.map((inv) => (
+                {invitationsData?.map((inv) => (
                   <TableRow key={inv.id}>
                     <TableCell className="text-muted-foreground">
                       {inv.invited_email}

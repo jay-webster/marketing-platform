@@ -8,7 +8,7 @@ import { apiGet, apiPost } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import type { ChatSession, ChatSessionListResponse } from "@/lib/types"
+import type { ChatSession } from "@/lib/types"
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -23,7 +23,7 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["chat-sessions"],
-    queryFn: () => apiGet<ChatSessionListResponse>("/api/v1/chat/sessions"),
+    queryFn: () => apiGet<ChatSession[]>("/api/v1/chat/sessions"),
   })
 
   async function handleNewChat() {
@@ -53,7 +53,7 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
             </div>
           ))}
 
-        {data?.data.map((session) => (
+        {data?.map((session) => (
           <button
             key={session.id}
             onClick={() => router.push(`/chat/${session.id}`)}
@@ -83,7 +83,7 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
           </button>
         ))}
 
-        {!isLoading && data?.data.length === 0 && (
+        {!isLoading && data?.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-4">
             No conversations yet
           </p>

@@ -12,32 +12,21 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/layout/EmptyState"
-import type { JobStatus } from "@/lib/types"
+import type { BatchStatus } from "@/lib/types"
 
 const STATUS_VARIANTS: Record<
-  JobStatus,
+  BatchStatus,
   "default" | "secondary" | "destructive" | "outline"
 > = {
-  pending_approval: "outline",
-  queued: "outline",
-  processing: "secondary",
+  in_progress: "secondary",
   completed: "default",
-  failed: "destructive",
-  rejected: "outline",
+  completed_with_failures: "destructive",
 }
 
-const STATUS_LABELS: Record<JobStatus, string> = {
-  pending_approval: "Awaiting Review",
-  queued: "Queued",
-  processing: "Processing",
+const STATUS_LABELS: Record<BatchStatus, string> = {
+  in_progress: "Processing",
   completed: "Complete",
-  failed: "Failed",
-  rejected: "Rejected",
-}
-
-const STATUS_CLASS: Partial<Record<JobStatus, string>> = {
-  pending_approval: "text-amber-700 border-amber-300 bg-amber-50",
-  rejected: "text-slate-500 border-slate-200 bg-slate-50",
+  completed_with_failures: "Completed with failures",
 }
 
 export function JobTable() {
@@ -56,8 +45,8 @@ export function JobTable() {
   if (jobs.length === 0) {
     return (
       <EmptyState
-        title="No ingestion jobs"
-        description="Upload a document above to start processing."
+        title="No submissions yet"
+        description="Upload a document above to get started."
       />
     )
   }
@@ -67,35 +56,33 @@ export function JobTable() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>File Name</TableHead>
+            <TableHead>Folder / Name</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Created</TableHead>
+            <TableHead>Documents</TableHead>
+            <TableHead>Submitted</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {jobs.map((job) => (
-            <TableRow key={job.id}>
+            <TableRow key={job.batch_id}>
               <TableCell className="font-medium">
-                {job.original_filename}
-                {job.failure_reason && (
-                  <p
-                    className="text-xs text-destructive mt-0.5 truncate max-w-xs"
-                    title={job.failure_reason}
-                  >
-                    {job.failure_reason}
-                  </p>
-                )}
+                {job.source_folder_name}
               </TableCell>
               <TableCell>
-                <Badge
-                  variant={STATUS_VARIANTS[job.processing_status]}
-                  className={STATUS_CLASS[job.processing_status]}
-                >
-                  {STATUS_LABELS[job.processing_status]}
+                <Badge variant={STATUS_VARIANTS[job.status]}>
+                  {STATUS_LABELS[job.status]}
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground text-sm">
-                {new Date(job.queued_at).toLocaleString()}
+                {job.completed_count}/{job.total_documents}
+                {job.failed_count > 0 && (
+                  <span className="text-destructive ml-1">
+                    ({job.failed_count} failed)
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-muted-foreground text-sm">
+                {new Date(job.submitted_at).toLocaleString()}
               </TableCell>
             </TableRow>
           ))}

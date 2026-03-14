@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/layout/EmptyState"
-import type { ContentListResponse, ContentItem } from "@/lib/types"
+import type { ContentItem } from "@/lib/types"
 
 const STATUS_VARIANTS: Record<
   ContentItem["status"],
@@ -48,9 +48,9 @@ export function ContentTable({
   const { data, isLoading } = useQuery({
     queryKey: ["content", status, offset],
     queryFn: () =>
-      apiGet<ContentListResponse>(
+      apiGet<ContentItem[]>(
         `/api/v1/ingestion/documents?${queryParams.toString()}`
-      ),
+      ).catch(() => [] as ContentItem[]),
   })
 
   function navigate(newOffset: number) {
@@ -69,7 +69,7 @@ export function ContentTable({
     )
   }
 
-  if (!data || data.data.length === 0) {
+  if (!data || data.length === 0) {
     return (
       <EmptyState
         title="No content found"
@@ -78,9 +78,9 @@ export function ContentTable({
     )
   }
 
-  const total = data.total
+  const total = data.length
   const hasPrev = offset > 0
-  const hasNext = offset + PAGE_SIZE < total
+  const hasNext = data.length === PAGE_SIZE
 
   return (
     <div className="space-y-4">
@@ -95,7 +95,7 @@ export function ContentTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.data.map((item) => (
+            {data.map((item) => (
               <TableRow
                 key={item.id}
                 className="cursor-pointer hover:bg-muted/50"

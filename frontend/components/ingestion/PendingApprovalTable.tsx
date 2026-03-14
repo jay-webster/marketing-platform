@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/layout/EmptyState"
-import type { PendingDocumentListResponse, PendingDocument } from "@/lib/types"
+import type { PendingDocument } from "@/lib/types"
 
 const API_PATH = "/api/v1/ingestion/pending"
 
@@ -27,11 +27,11 @@ export function PendingApprovalTable() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["pending-approvals"],
-    queryFn: () => apiGet<PendingDocumentListResponse>(API_PATH),
+    queryFn: () => apiGet<PendingDocument[]>(API_PATH),
     refetchInterval: 5000,
   })
 
-  const pending = data?.data ?? []
+  const pending = data ?? []
 
   async function handleApprove(doc: PendingDocument) {
     setActingOn(doc.id)

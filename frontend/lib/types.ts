@@ -31,12 +31,6 @@ export interface ContentDetail extends ContentItem {
   metadata: Record<string, unknown>;
 }
 
-export interface ContentListResponse {
-  data: ContentItem[];
-  total: number;
-  limit: number;
-  offset: number;
-}
 
 // Ingestion
 export type JobStatus =
@@ -63,14 +57,17 @@ export interface PendingDocument extends IngestionJob {
   submitted_by_id: string;
 }
 
-export interface IngestionListResponse {
-  data: IngestionJob[];
-  total: number;
-}
+// Batch-level summary returned by GET /api/v1/ingestion/batches
+export type BatchStatus = "in_progress" | "completed" | "completed_with_failures"
 
-export interface PendingDocumentListResponse {
-  data: PendingDocument[];
-  total: number;
+export interface BatchSummary {
+  batch_id: string
+  source_folder_name: string
+  status: BatchStatus
+  total_documents: number
+  completed_count: number
+  failed_count: number
+  submitted_at: string
 }
 
 // Chat
@@ -99,12 +96,6 @@ export interface SourceDoc {
   similarity: number;
 }
 
-export interface ChatSessionListResponse {
-  data: ChatSession[];
-  total: number;
-  limit: number;
-  offset: number;
-}
 
 export interface SSEChunkEvent {
   text: string;
@@ -140,10 +131,6 @@ export interface Invitation {
   created_at: string;
 }
 
-export interface UserListResponse {
-  data: User[];
-  total: number;
-}
 
 // GitHub Connection
 export type ConnectionStatus = "connected" | "disconnected" | "error";
