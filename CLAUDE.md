@@ -124,3 +124,10 @@ Before outputting any code, verify:
 | `KB_INDEX_CONCURRENCY` | Indexing worker count (default 2) (Epic 4) |
 | `APP_URL` | Public base URL |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` | Email delivery |
+
+## Active Technologies
+- Python 3.11 / FastAPI (backend), Next.js 15 App Router (frontend) + SQLAlchemy async, httpx, Alembic, aiosmtplib, Anthropic SDK, Voyage AI (all existing) (006-content-sync-ingest)
+- PostgreSQL 16 + pgvector (primary), GCS (transient file staging) (006-content-sync-ingest)
+
+## Recent Changes
+- 006-content-sync-ingest: Added Python 3.11 / FastAPI (backend), Next.js 15 App Router (frontend) + SQLAlchemy async, httpx, Alembic, aiosmtplib, Anthropic SDK, Voyage AI (all existing)
