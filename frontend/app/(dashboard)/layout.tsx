@@ -1,18 +1,12 @@
 import { getUser } from "@/lib/dal";
+import { DashboardShell } from "@/components/layout/DashboardShell";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Server-side auth guard: redirects to /login if not authenticated
-  await getUser();
+  const user = await getUser();
 
-  return (
-    <div className="flex h-screen">
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
-    </div>
-  );
+  return <DashboardShell user={user}>{children}</DashboardShell>;
 }

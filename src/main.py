@@ -101,9 +101,17 @@ def create_app() -> FastAPI:
     )
 
     # CORS
+    # Note: allow_credentials=True requires explicit origins (no wildcard).
+    # Add new Vercel preview/production URLs here as the frontend grows.
+    _cors_origins = [
+        "http://localhost:3000",  # local Next.js dev
+        "https://app.activelab.com",  # production frontend
+    ]
+    # Accept any Vercel preview deploy URL for the project
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_cors_origins,
+        allow_origin_regex=r"https://.*\.vercel\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

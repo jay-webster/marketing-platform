@@ -43,6 +43,11 @@ export async function apiFetch<T = unknown>(
   });
 
   if (!response.ok) {
+    // 401 on the client side: redirect to login
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+
     let errorBody: Partial<APIError> = {};
     try {
       errorBody = await response.json();
