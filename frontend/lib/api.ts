@@ -45,14 +45,17 @@ export async function apiFetch<T = unknown>(
       // Response body is not JSON — use status text
     }
 
-    // Backend may return detail as a string or as {error, code}
-    const raw = errorBody.detail;
+    // Backend wraps errors as detail (string or {message,code,...})
+    // Proxy errors use top-level {error: "..."}
+    const raw = errorBody.detail ?? errorBody.error;
     const message =
       typeof raw === "string"
         ? raw
         : raw && typeof raw === "object"
-        ? (raw as Record<string, string>).error ?? JSON.stringify(raw)
-        : (response.statusText ?? "Request failed");
+        ? (raw as Record<string, string>).message ??
+          (raw as Record<string, string>).error ??
+          JSON.stringify(raw)
+        : response.statusText || `Request failed (${response.status})`;
 
     throw new ApiError(
       response.status,

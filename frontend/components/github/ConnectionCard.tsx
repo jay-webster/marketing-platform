@@ -73,7 +73,7 @@ export function ConnectionCard({
       form.reset()
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "Failed to connect repository"
+        (err instanceof Error && err.message) ? err.message : "Failed to connect repository"
       toast.error(message)
     }
   }
