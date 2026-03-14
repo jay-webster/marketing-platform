@@ -55,9 +55,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await backendResponse.json();
+  const responseData = await backendResponse.json();
   const accessToken: string | undefined =
-    body?.data?.access_token ?? body?.access_token;
+    responseData?.data?.access_token ?? responseData?.access_token;
 
   if (!accessToken) {
     return NextResponse.json(
