@@ -1,10 +1,5 @@
 import type { APIError } from "@/lib/types";
 
-const API_URL =
-  typeof window === "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
-
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -18,24 +13,19 @@ export class ApiError extends Error {
 
 /**
  * Core fetch wrapper.
- * - Prepends NEXT_PUBLIC_API_URL for absolute backend paths
- * - Prepends nothing for relative /api/* paths (Next.js Route Handlers)
- * - Sets credentials: 'include' so the auth-token cookie is forwarded
- * - Throws ApiError on non-2xx responses
+ * - All /api/v1/* paths go through the Next.js BFF proxy at /api/v1/[...path]
+ *   which reads the httpOnly auth-token cookie and adds the Authorization header.
+ * - Other relative paths (e.g. /api/auth/*) go to Next.js Route Handlers directly.
+ * - Throws ApiError on non-2xx responses.
  */
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  // Relative paths (e.g. /api/me) go to Next.js Route Handlers
-  // Absolute paths (e.g. /api/v1/...) go to the FastAPI backend
-  const url = path.startsWith("/api/v1/") || path.startsWith("/api/v1")
-    ? `${API_URL}${path}`
-    : path;
+  const url = path;
 
   const response = await fetch(url, {
     ...options,
-    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
@@ -76,7 +66,9 @@ export async function apiFetch<T = unknown>(
     return undefined as T;
   }
 
-  return response.json() as Promise<T>;
+  const json = await response.json();
+  // Unwrap FastAPI envelope: { data: ..., request_id: ... }
+  return (json?.request_id !== undefined ? json.data : json) as T;
 }
 
 export function apiGet<T = unknown>(
