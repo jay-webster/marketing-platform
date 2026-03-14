@@ -252,6 +252,28 @@ frontend/
 
 ---
 
+### Phase 9 — Ingestion Approval Queue
+
+**Goal**: Non-admin uploads enter a pending state; admins approve or reject before processing begins
+
+**Backend**:
+1. Modify `src/api/ingestion.py` — gate initial `processing_status` on `current_user.role` (`"queued"` for admin, `"pending_approval"` for everyone else)
+2. Add `GET /api/v1/ingestion/pending` — admin-only; returns `pending_approval` documents joined with submitter `display_name`
+3. Add `POST /api/v1/ingestion/documents/{doc_id}/approve` — admin-only; transitions to `"queued"`, writes audit
+4. Add `POST /api/v1/ingestion/documents/{doc_id}/reject` — admin-only; deletes GCS file, transitions to `"rejected"`, writes audit
+
+**Frontend**:
+1. Update `lib/types.ts` — add `pending_approval` and `rejected` to `JobStatus`; fix `"complete"` → `"completed"` enum mismatch
+2. Update `hooks/useIngestionPoll.ts` — include `pending_approval` in `hasActiveJobs` check
+3. Update `components/ingestion/UploadZone.tsx` — accept `userRole` prop; show "Submit for Review" label and review-pending toast for non-admin
+4. Create `components/ingestion/PendingApprovalTable.tsx` — admin-only; `GET /api/v1/ingestion/pending`; Approve/Reject action buttons per row
+5. Update `components/ingestion/JobTable.tsx` — add amber badge for `pending_approval`, muted badge for `rejected`
+6. Update `app/(dashboard)/ingestion/page.tsx` — pass user role to components; render `<PendingApprovalTable>` for admin
+
+**Milestone**: Non-admin uploads file → sees "Submitted for review" → admin sees item in Pending Approvals → approves → document enters processing queue.
+
+---
+
 ### Phase 8 — Polish
 
 **Goal**: Error states, loading skeletons, CORS, production deploy
@@ -275,9 +297,30 @@ frontend/
 | Dashboard | `GET /api/v1/ingestion/documents`, `GET /api/v1/ingestion/batches`, `GET /api/v1/chat/sessions` |
 | Chat | `GET /api/v1/chat/sessions`, `POST /api/v1/chat/sessions`, `GET /api/v1/chat/sessions/{id}/messages`, `POST /api/v1/chat/sessions/{id}/messages` (SSE) |
 | Content | `GET /api/v1/ingestion/documents`, `GET /api/v1/ingestion/documents/{id}` |
-| Ingestion | `POST /api/v1/ingestion/upload`, `GET /api/v1/ingestion/batches` |
+| Ingestion (all users) | `POST /api/v1/ingestion/upload`, `GET /api/v1/ingestion/batches` |
+| Ingestion (admin only) | `GET /api/v1/ingestion/pending`, `POST /api/v1/ingestion/documents/{id}/approve`, `POST /api/v1/ingestion/documents/{id}/reject` |
 | GitHub | `GET /api/v1/github/connection`, `POST /api/v1/github/connect`, `DELETE /api/v1/github/connection` |
 | Users | `GET /api/v1/users`, `POST /api/v1/users/invite`, `GET /api/v1/users/invitations` |
+
+### New Ingestion Approval Endpoints (to be added to FastAPI)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/v1/ingestion/pending` | admin | List all documents with `processing_status = "pending_approval"` joined with submitter `display_name` |
+| `POST` | `/api/v1/ingestion/documents/{doc_id}/approve` | admin | Set `processing_status = "queued"`, reset `queued_at`; write audit log |
+| `POST` | `/api/v1/ingestion/documents/{doc_id}/reject` | admin | Delete GCS file, set `processing_status = "rejected"`; write audit log |
+
+### Approval Queue Role Logic (upload endpoint change)
+
+The existing `POST /api/v1/ingestion/upload` must be modified to gate the initial document status on role:
+
+```python
+# src/api/ingestion.py — batch submission
+initial_status = "queued" if current_user.role == "admin" else "pending_approval"
+# Each IngestionDocument created with processing_status = initial_status
+```
+
+The queue worker (`utils/queue.py`) is unchanged — it already only claims documents where `processing_status = "queued"`, so `pending_approval` documents are automatically skipped.
 
 ---
 

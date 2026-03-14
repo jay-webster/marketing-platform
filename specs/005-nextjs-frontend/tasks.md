@@ -149,6 +149,31 @@
 
 ---
 
+---
+
+## Phase 11: US8 — Ingestion Approval Queue
+
+**Story goal**: Non-admin users submit files for admin review before processing; admins approve or reject from a dedicated queue view.
+**Independent test**: Upload as marketer → see "Submitted for review" toast → job shows status "Awaiting Review". Log in as admin → see pending item in approval table → approve → job transitions to "queued" then processes normally. Admin upload bypasses approval and goes directly to "queued".
+
+### Backend (in `../src/api/ingestion.py` relative to frontend spec)
+
+- [ ] T061 [US8] Modify batch submission in `src/api/ingestion.py` — set `initial_status = "queued" if current_user.role == "admin" else "pending_approval"`; apply to all `IngestionDocument` records created in the batch; update audit log field to record role-based routing at `../src/api/ingestion.py`
+- [ ] T062 [P] [US8] Add `GET /api/v1/ingestion/pending` to `src/api/ingestion.py` — admin-only (`require_role`); query all `IngestionDocument` where `processing_status = "pending_approval"`, join with `User` to include `submitted_by_name` (display_name); return `{ "data": [...], "total": int }` envelope at `../src/api/ingestion.py`
+- [ ] T063 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/approve` to `src/api/ingestion.py` — admin-only; set `processing_status = "queued"`, `queued_at = datetime.now(UTC)`; write audit log `ingestion_document_approved` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
+- [ ] T064 [P] [US8] Add `POST /api/v1/ingestion/documents/{doc_id}/reject` to `src/api/ingestion.py` — admin-only; call `delete_from_gcs(doc.gcs_object_path)` to remove staged file; set `processing_status = "rejected"`; write audit log `ingestion_document_rejected` with `actor_id = current_user.id`; return updated document at `../src/api/ingestion.py`
+
+### Frontend
+
+- [ ] T065 [US8] Update `lib/types.ts` — add `"pending_approval"` and `"rejected"` to `JobStatus`; fix `"complete"` → `"completed"` to match backend enum; add `PendingDocument` interface (`extends IngestionJob` with `batch_id`, `submitted_by_name`, `submitted_by_id`); add `PendingDocumentListResponse` at `lib/types.ts`
+- [ ] T066 [P] [US8] Update `hooks/useIngestionPoll.ts` — add `"pending_approval"` to `hasActiveJobs` status check so polling stays active while items await admin approval at `hooks/useIngestionPoll.ts`
+- [ ] T067 [P] [US8] Update `components/ingestion/UploadZone.tsx` — accept `userRole: string` prop; change submit button label to "Submit for Review" for non-admin; show "Submitted for admin review" success toast for non-admin; keep existing "Upload" label and toast for admin at `components/ingestion/UploadZone.tsx`
+- [ ] T068 [P] [US8] Create `components/ingestion/PendingApprovalTable.tsx` — admin-only client component; TanStack Query `GET /api/v1/ingestion/pending` with key `"pending-approvals"`; refetchInterval 5000; columns: File Name, Submitted By, Submitted At; per-row Approve button (`POST .../approve`) and Reject button (destructive, `POST .../reject`) with confirmation; on action invalidates `"pending-approvals"` and `"ingestion-batches"` query keys; empty state "No pending submissions" at `components/ingestion/PendingApprovalTable.tsx`
+- [ ] T069 [P] [US8] Update `components/ingestion/JobTable.tsx` — add amber/yellow badge for `pending_approval` status (label: "Awaiting Review"); add muted/slate badge for `rejected` status (label: "Rejected") at `components/ingestion/JobTable.tsx`
+- [ ] T070 [US8] Update `app/(dashboard)/ingestion/page.tsx` — convert to server component; call `getUser()` from DAL; pass `userRole={user.role}` to `<UploadZone>`; render `<PendingApprovalTable>` above `<UploadZone>` for admin only at `app/(dashboard)/ingestion/page.tsx`
+
+---
+
 ## Dependencies
 
 ```
@@ -160,12 +185,14 @@ All phases → Phase 10 (Polish)
 
 **Story dependency order**:
 ```
-US1 (Login) ──► US2 (Dashboard) ──► US3 (Chat)     ┐
-                                 ├─► US4 (Content)  ├─► Polish
-                                 ├─► US5 (Ingestion)│
-                                 ├─► US6 (GitHub)   │
-                                 └─► US7 (Users)    ┘
+US1 (Login) ──► US2 (Dashboard) ──► US3 (Chat)          ┐
+                                 ├─► US4 (Content)       ├─► Polish
+                                 ├─► US5 (Ingestion) ──► US8 (Approval Queue)
+                                 ├─► US6 (GitHub)        │
+                                 └─► US7 (Users)         ┘
 ```
+
+US8 depends on US5 (Ingestion) being complete. Backend tasks T061–T064 can be worked in parallel with frontend tasks T065–T070 once US5 is done. T070 (page update) depends on T068 (PendingApprovalTable) completing first.
 
 US3–US7 can be developed in parallel once US2 layout shell is complete, since they are separate route segments with no shared component dependencies.
 
@@ -214,4 +241,5 @@ US3–US7 can be developed in parallel once US2 layout shell is complete, since 
 | Phase 8 | US6 GitHub | T050–T051 | — |
 | Phase 9 | US7 Users | T052–T054 | — |
 | Phase 10 | Polish | T055–T060 | T056, T060 |
-| **Total** | | **60 tasks** | **~15 parallel** |
+| Phase 11 | US8 Approval Queue | T061–T070 | T062–T064 (backend), T066–T069 (frontend) |
+| **Total** | | **70 tasks** | **~23 parallel** |

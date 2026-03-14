@@ -57,7 +57,13 @@ interface ContentListResponse {
 ## Ingestion
 
 ```typescript
-type JobStatus = 'queued' | 'processing' | 'complete' | 'failed'
+// 'pending_approval' — non-admin upload awaiting admin approval before processing
+// 'queued'           — approved/admin upload, waiting for worker
+// 'processing'       — actively being processed by a worker
+// 'completed'        — successfully processed (note: backend uses 'completed', not 'complete')
+// 'failed'           — processing failed; failure_reason populated
+// 'rejected'         — admin rejected the upload; GCS file deleted
+type JobStatus = 'pending_approval' | 'queued' | 'processing' | 'completed' | 'failed' | 'rejected'
 
 interface IngestionJob {
   id: string
@@ -68,8 +74,20 @@ interface IngestionJob {
   updated_at: string
 }
 
+// Extended shape returned by GET /api/v1/ingestion/pending (admin only)
+interface PendingDocument extends IngestionJob {
+  batch_id: string
+  submitted_by_name: string   // display_name of the submitting user
+  submitted_by_id: string
+}
+
 interface IngestionListResponse {
   data: IngestionJob[]
+  total: number
+}
+
+interface PendingDocumentListResponse {
+  data: PendingDocument[]
   total: number
 }
 ```
@@ -198,8 +216,13 @@ interface PaginationParams {
 
 ### Ingestion Job
 ```
-queued → processing → complete
-                    ↘ failed
+[non-admin upload]
+pending_approval ──► queued (admin approves) ──► processing ──► completed
+                 ↘ rejected (admin rejects)                  ↘ failed
+
+[admin upload — bypasses approval]
+queued ──► processing ──► completed
+                       ↘ failed
 ```
 
 ### Chat Session (client-side streaming state)
