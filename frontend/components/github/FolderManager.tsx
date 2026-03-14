@@ -143,9 +143,14 @@ export function FolderManager() {
         {discoveredFolders.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Found in repo
-              </p>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Found in repo
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Add folders below to start syncing their content.
+                </p>
+              </div>
               {unconfigured.length > 0 && (
                 <Button
                   variant="secondary"

@@ -61,12 +61,16 @@ async def _lifespan(application: FastAPI):
             except Exception:
                 pass
 
-    # Seed default repo structure config if none exists
+    # Seed default repo structure config if none exists.
+    # Uses INSERT ... ON CONFLICT DO NOTHING to avoid duplicate rows when
+    # multiple pods start simultaneously (race condition with replicas > 1).
     async with AsyncSessionLocal() as db:
         try:
-            existing = await db.scalar(select(RepoStructureConfig).limit(1))
-            if existing is None:
-                default_config = RepoStructureConfig(
+            from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: PLC0415
+            stmt = (
+                pg_insert(RepoStructureConfig)
+                .values(
+                    id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
                     folders={
                         "folders": [
                             "content/campaigns",
@@ -80,9 +84,11 @@ async def _lifespan(application: FastAPI):
                     is_default=True,
                     created_by=None,
                 )
-                db.add(default_config)
-                await db.commit()
-                logger.info("Seeded default repository structure configuration.")
+                .on_conflict_do_nothing(index_elements=["id"])
+            )
+            await db.execute(stmt)
+            await db.commit()
+            logger.info("Default repository structure config ensured.")
         except Exception:
             logger.exception("Failed to seed default repo structure config.")
 
