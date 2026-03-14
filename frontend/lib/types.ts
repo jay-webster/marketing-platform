@@ -39,7 +39,9 @@ export type JobStatus =
   | "processing"
   | "completed"         // note: backend uses "completed", not "complete"
   | "failed"
-  | "rejected";         // admin rejected; GCS file deleted
+  | "rejected"          // admin rejected; GCS file deleted
+  | "pr_open"           // worker created branch + PR in GitHub
+  | "merged";           // admin merged PR in-app
 
 export interface IngestionJob {
   id: string;
@@ -132,6 +134,72 @@ export interface Invitation {
 }
 
 
+// GitHub Sync
+export type SyncOutcome = "in_progress" | "success" | "partial" | "failed" | "interrupted";
+export type SyncTriggerType = "manual" | "scheduled";
+
+export interface SyncRun {
+  id: string;
+  trigger_type: SyncTriggerType;
+  triggered_by: string | null;
+  started_at: string;
+  finished_at: string | null;
+  outcome: SyncOutcome;
+  files_indexed: number;
+  files_removed: number;
+  files_unchanged: number;
+  error_detail: string | null;
+}
+
+export interface SyncStatus {
+  connection_id: string;
+  last_synced_at: string | null;
+  active_document_count: number;
+  latest_run: SyncRun | null;
+}
+
+// Synced content item from GET /content
+export type KBIndexStatus = "queued" | "indexing" | "indexed" | "failed" | "removed";
+
+export interface SyncedContent {
+  id: string;
+  title: string | null;
+  repo_path: string;
+  folder: string;
+  index_status: KBIndexStatus;
+  last_synced_at: string;
+  chunk_count: number | null;
+}
+
+export interface SyncedContentDetail extends SyncedContent {
+  raw_content: string;
+}
+
+// PR ingestion item from GET /ingestion/prs
+export interface PRItem {
+  id: string;
+  original_filename: string;
+  destination_folder: string;
+  github_branch: string;
+  github_pr_number: number;
+  github_pr_url: string;
+  submitted_by_name: string;
+  submitted_by_email: string;
+  queued_at: string;
+}
+
+export interface PRReviewData {
+  id: string;
+  original_filename: string;
+  destination_folder: string;
+  github_branch: string;
+  github_pr_number: number;
+  github_pr_url: string;
+  markdown_content: string;
+  current_folder: string;
+  configured_folders: string[];
+}
+
 // GitHub Connection
 export type ConnectionStatus = "active" | "inactive";
 
@@ -142,6 +210,7 @@ export interface GitHubConnection {
   connected_at: string;
   last_validated_at: string;
   last_scaffolded_at: string | null;
+  last_synced_at: string | null;
   token_on_file: boolean;
 }
 

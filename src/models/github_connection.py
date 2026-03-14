@@ -31,3 +31,7 @@ class GitHubConnection(Base):
     last_scaffolded_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    default_branch: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -119,28 +119,96 @@ async def process_document(doc_id: uuid.UUID) -> None:
             )
             db.add(processed)
 
-            # Update document status
             now = datetime.now(timezone.utc)
-            doc.processing_status = "completed"
-            doc.processing_completed_at = now
-            doc.failure_reason = None
 
-            # Update batch counters and status
-            batch = await db.get(IngestionBatch, doc.batch_id)
-            if batch:
-                batch.completed_count += 1
-                _recompute_batch_status(batch)
+            if doc.destination_folder:
+                # PR workflow: create branch + file + PR in GitHub
+                import re as _re  # noqa: PLC0415
+                import time as _time  # noqa: PLC0415
+                from src.models.github_connection import GitHubConnection  # noqa: PLC0415
+                from utils.crypto import decrypt_token  # noqa: PLC0415
+                from utils.github_api import (  # noqa: PLC0415
+                    get_default_branch as _get_default_branch,
+                    get_branch_sha,
+                    create_branch,
+                    commit_file,
+                    create_pr,
+                )
 
-            await write_audit(db, "ingestion_document_completed", target_id=doc_id,
-                              metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename})
+                conn_result = await db.execute(
+                    select(GitHubConnection).where(GitHubConnection.status == "active").limit(1)
+                )
+                conn = conn_result.scalar_one_or_none()
+                if conn is None:
+                    raise RuntimeError("No active GitHub connection — cannot create PR")
 
-            await db.commit()
+                token = decrypt_token(conn.encrypted_token)
 
-            # Delete source file from GCS after successful processing
-            try:
-                await delete_from_gcs(settings.GCS_BUCKET_NAME, doc.gcs_object_path)
-            except Exception:
-                logger.warning("GCS cleanup failed for %s (non-fatal)", doc.gcs_object_path)
+                base_name = os.path.splitext(doc.original_filename)[0]
+                slug = _re.sub(r"[^a-z0-9]+", "-", base_name.lower()).strip("-")[:40]
+                branch_name = f"ingest/{slug}-{int(_time.time())}"
+
+                if not conn.default_branch:
+                    conn.default_branch = await _get_default_branch(conn.repository_url, token)
+                default_branch = conn.default_branch
+
+                head_sha = await get_branch_sha(conn.repository_url, token, default_branch)
+                await create_branch(conn.repository_url, token, branch_name, head_sha)
+
+                file_path = f"{doc.destination_folder}/{slug}.md"
+                await commit_file(
+                    conn.repository_url, token,
+                    branch=branch_name,
+                    path=file_path,
+                    content=markdown,
+                    message=f"ingest: {doc.original_filename}",
+                )
+
+                pr_number, pr_url = await create_pr(
+                    conn.repository_url, token,
+                    title=doc.original_filename,
+                    body="",
+                    head=branch_name,
+                    base=default_branch,
+                )
+
+                doc.github_branch = branch_name
+                doc.github_pr_number = pr_number
+                doc.github_pr_url = pr_url
+                doc.processing_status = "pr_open"
+                doc.processing_completed_at = now
+                doc.failure_reason = None
+
+                await write_audit(db, "ingestion_pr_created",
+                                  metadata={"doc_id": str(doc_id), "batch_id": str(doc.batch_id),
+                                            "filename": doc.original_filename, "pr_number": pr_number,
+                                            "branch": branch_name})
+                await db.commit()
+
+                try:
+                    await delete_from_gcs(settings.GCS_BUCKET_NAME, doc.gcs_object_path)
+                except Exception:
+                    logger.warning("GCS cleanup failed for %s (non-fatal)", doc.gcs_object_path)
+
+            else:
+                # Standard completion path
+                doc.processing_status = "completed"
+                doc.processing_completed_at = now
+                doc.failure_reason = None
+
+                batch = await db.get(IngestionBatch, doc.batch_id)
+                if batch:
+                    batch.completed_count += 1
+                    _recompute_batch_status(batch)
+
+                await write_audit(db, "ingestion_document_completed", target_id=doc_id,
+                                  metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename})
+                await db.commit()
+
+                try:
+                    await delete_from_gcs(settings.GCS_BUCKET_NAME, doc.gcs_object_path)
+                except Exception:
+                    logger.warning("GCS cleanup failed for %s (non-fatal)", doc.gcs_object_path)
 
         except Exception as exc:
             failure_reason = _map_exception_to_reason(exc)
@@ -166,7 +234,10 @@ async def process_document(doc_id: uuid.UUID) -> None:
 
 def _map_exception_to_reason(exc: Exception) -> str:
     from utils.extractors import REASON_EMPTY, REASON_CORRUPT, REASON_NO_TEXT, REASON_OVERSIZED  # noqa: PLC0415
+    from utils.github_api import GitHubUnavailableError  # noqa: PLC0415
     msg = str(exc)
+    if isinstance(exc, GitHubUnavailableError):
+        return f"GitHub unavailable during PR creation: {msg}"
     if msg in (REASON_EMPTY, REASON_CORRUPT, REASON_NO_TEXT, REASON_OVERSIZED):
         return msg
     if "timed out" in msg.lower():
@@ -359,3 +430,87 @@ async def stop_indexing_workers() -> None:
     await asyncio.gather(*_indexing_worker_tasks, return_exceptions=True)
     _indexing_worker_tasks.clear()
     logger.info("KB indexing workers stopped")
+
+
+# ---------------------------------------------------------------------------
+# Scheduled sync loop
+# ---------------------------------------------------------------------------
+
+_sync_scheduler_task: asyncio.Task | None = None
+
+SYNC_POLL_INTERVAL_SECONDS = 60  # Check schedule every minute
+
+
+async def _scheduled_sync_loop(interval_minutes: int) -> None:
+    """Runs scheduled syncs on the configured interval."""
+    from src.models.github_connection import GitHubConnection  # noqa: PLC0415
+    from src.models.sync_run import SyncRun, SyncOutcome  # noqa: PLC0415
+    from utils.sync import run_sync  # noqa: PLC0415
+    from datetime import timedelta  # noqa: PLC0415
+
+    logger.info("Scheduled sync loop started (interval: %d minutes)", interval_minutes)
+    interval_delta = timedelta(minutes=interval_minutes)
+
+    while True:
+        try:
+            await asyncio.sleep(SYNC_POLL_INTERVAL_SECONDS)
+
+            async with AsyncSessionLocal() as db:
+                from sqlalchemy import select  # noqa: PLC0415
+                conn = await db.scalar(
+                    select(GitHubConnection).where(GitHubConnection.status == "active")
+                )
+                if conn is None:
+                    continue
+
+                from datetime import datetime, timezone  # noqa: PLC0415
+                now = datetime.now(timezone.utc)
+                last_synced = conn.last_synced_at
+
+                if last_synced is not None and (now - last_synced) < interval_delta:
+                    continue
+
+                # Check not already in progress
+                from sqlalchemy import select as sa_select  # noqa: PLC0415
+                in_progress = await db.scalar(
+                    sa_select(SyncRun)
+                    .where(
+                        SyncRun.connection_id == conn.id,
+                        SyncRun.outcome == SyncOutcome.IN_PROGRESS.value,
+                    )
+                    .limit(1)
+                )
+                if in_progress is not None:
+                    continue
+
+            from src.models.sync_run import SyncTriggerType  # noqa: PLC0415
+            await run_sync(
+                connection_id=conn.id,
+                triggered_by=None,
+                trigger_type=SyncTriggerType.SCHEDULED.value,
+            )
+
+        except asyncio.CancelledError:
+            logger.info("Scheduled sync loop shutting down")
+            return
+        except Exception:
+            logger.exception("Scheduled sync loop unhandled error — continuing")
+
+
+async def start_sync_scheduler(interval_minutes: int = 60) -> None:
+    """Start the scheduled sync background task. Call from app lifespan."""
+    global _sync_scheduler_task
+    _sync_scheduler_task = asyncio.create_task(
+        _scheduled_sync_loop(interval_minutes)
+    )
+    logger.info("Scheduled sync scheduler started (interval: %d minutes)", interval_minutes)
+
+
+async def stop_sync_scheduler() -> None:
+    """Gracefully stop the scheduled sync task."""
+    global _sync_scheduler_task
+    if _sync_scheduler_task:
+        _sync_scheduler_task.cancel()
+        await asyncio.gather(_sync_scheduler_task, return_exceptions=True)
+        _sync_scheduler_task = None
+        logger.info("Scheduled sync scheduler stopped")

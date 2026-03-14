@@ -10,12 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.content_chunk import ContentChunk
 from src.models.knowledge_base_document import KBIndexStatus, KnowledgeBaseDocument
 from src.models.processed_document import ProcessedDocument
+from src.models.synced_document import SyncedDocument
 from utils.chunker import chunk_markdown
 from utils.embeddings import embed_batch
 
 
 async def index_document(db: AsyncSession, kb_doc_id: uuid.UUID) -> None:
     """Chunk, embed, and store all content_chunks for a KnowledgeBaseDocument.
+
+    Supports two content sources:
+      - processed_document_id set → upload pipeline (ProcessedDocument.structured_content)
+      - synced_document_id set    → GitHub sync pipeline (SyncedDocument.raw_content)
 
     Marks the KB doc as INDEXING before starting, then INDEXED on success,
     or FAILED with a failure_reason on error.  Existing chunks are deleted
@@ -37,20 +42,47 @@ async def index_document(db: AsyncSession, kb_doc_id: uuid.UUID) -> None:
     await db.commit()
 
     try:
-        # Load KB doc + processed document content
-        result = await db.execute(
-            select(KnowledgeBaseDocument, ProcessedDocument)
-            .join(ProcessedDocument, ProcessedDocument.id == KnowledgeBaseDocument.processed_document_id)
-            .where(KnowledgeBaseDocument.id == kb_doc_id)
+        # Load KB doc to determine source type
+        kb_doc_result = await db.execute(
+            select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == kb_doc_id)
         )
-        row = result.one_or_none()
-        if row is None:
+        kb_doc = kb_doc_result.scalar_one_or_none()
+        if kb_doc is None:
             raise ValueError(f"KnowledgeBaseDocument {kb_doc_id} not found")
 
-        kb_doc, proc_doc = row
+        # Dispatch on source type
+        if kb_doc.synced_document_id is not None:
+            # GitHub sync pipeline
+            synced_result = await db.execute(
+                select(SyncedDocument).where(SyncedDocument.id == kb_doc.synced_document_id)
+            )
+            synced_doc = synced_result.scalar_one_or_none()
+            if synced_doc is None:
+                raise ValueError(
+                    f"SyncedDocument {kb_doc.synced_document_id} not found for KB doc {kb_doc_id}"
+                )
+            markdown = synced_doc.raw_content or ""
+            metadata: dict = {
+                "source": "github_sync",
+                "repo_path": synced_doc.repo_path,
+                "folder": synced_doc.folder,
+                "title": synced_doc.title or "",
+            }
+        else:
+            # Upload pipeline (original path)
+            result = await db.execute(
+                select(KnowledgeBaseDocument, ProcessedDocument)
+                .join(ProcessedDocument, ProcessedDocument.id == KnowledgeBaseDocument.processed_document_id)
+                .where(KnowledgeBaseDocument.id == kb_doc_id)
+            )
+            row = result.one_or_none()
+            if row is None:
+                raise ValueError(f"KnowledgeBaseDocument {kb_doc_id} not found")
 
-        markdown = proc_doc.structured_content or ""
-        metadata = proc_doc.metadata or {}
+            kb_doc, proc_doc = row
+
+            markdown = proc_doc.structured_content or ""
+            metadata = proc_doc.metadata or {}
 
         # Remove existing chunks (safe re-index)
         await db.execute(

@@ -1,6 +1,8 @@
 import { cookies } from "next/headers"
 import { requireRole } from "@/lib/dal"
 import { ConnectionCard } from "@/components/github/ConnectionCard"
+import { SyncCard } from "@/components/github/SyncCard"
+import { FolderManager } from "@/components/github/FolderManager"
 import type { GitHubConnection } from "@/lib/types"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
@@ -34,6 +36,8 @@ export default async function GitHubPage() {
         </p>
       </div>
       <ConnectionCard connection={connection} />
+      {connection && <SyncCard />}
+      {connection && <FolderManager />}
     </div>
   )
 }
