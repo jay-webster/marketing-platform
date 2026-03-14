@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         ? (raw as Record<string, string>).error ?? "Authentication failed"
         : "Authentication failed";
     return NextResponse.json(
-      { error: message, debug_url: API_URL, debug_status: backendResponse.status },
+      { error: message },
       { status: backendResponse.status }
     );
   }
