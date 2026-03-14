@@ -2,9 +2,10 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { Trash2 } from "lucide-react"
+import { Trash2, ScanSearch, Plus } from "lucide-react"
 
 import { useConfigFolders, useAddFolder, useRemoveFolder } from "@/hooks/useConfigFolders"
+import { useDiscoverFolders } from "@/hooks/useDiscoverFolders"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -16,7 +17,6 @@ import {
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
-const FOLDER_RE = /^[^/].*[^/]$|^[^./][^/]*[^./]$|^[a-zA-Z0-9_-]+$/
 const TRAVERSAL_RE = /\.\./
 
 function validateFolder(value: string): string | null {
@@ -30,28 +30,46 @@ export function FolderManager() {
   const { folders, isLoading } = useConfigFolders()
   const addFolder = useAddFolder()
   const removeFolder = useRemoveFolder()
+  const { discoveredFolders, isDiscovering, discoverError, discover, reset } = useDiscoverFolders()
   const [newFolder, setNewFolder] = useState("")
   const [validationError, setValidationError] = useState<string | null>(null)
 
-  async function handleAdd() {
-    const err = validateFolder(newFolder)
+  // Folders found in the repo that aren't already configured
+  const unconfigured = discoveredFolders.filter((f) => !folders.includes(f))
+
+  async function handleAdd(folder: string = newFolder) {
+    const err = validateFolder(folder)
     if (err) { setValidationError(err); return }
     setValidationError(null)
 
     try {
-      const result = await addFolder.mutateAsync(newFolder)
+      const result = await addFolder.mutateAsync(folder)
       const outcome = result?.scaffold_outcome
       if (outcome === "success") {
-        toast.success(`Folder "${newFolder}" added and scaffolded in repo`)
+        toast.success(`Folder "${folder}" added and scaffolded in repo`)
       } else if (outcome === "failed") {
-        toast.warning(`Folder "${newFolder}" added, but repo scaffolding failed — create the folder manually if needed`)
+        toast.warning(`Folder "${folder}" added, but repo scaffolding failed — create the folder manually if needed`)
       } else {
-        toast.success(`Folder "${newFolder}" added`)
+        toast.success(`Folder "${folder}" added`)
       }
-      setNewFolder("")
+      if (folder === newFolder) setNewFolder("")
     } catch (err) {
       toast.error((err instanceof Error && err.message) ? err.message : "Failed to add folder")
     }
+  }
+
+  async function handleAddAll() {
+    let added = 0
+    for (const folder of unconfigured) {
+      try {
+        await addFolder.mutateAsync(folder)
+        added++
+      } catch {
+        toast.error(`Failed to add "${folder}"`)
+      }
+    }
+    if (added > 0) toast.success(`Added ${added} folder${added === 1 ? "" : "s"}`)
+    reset()
   }
 
   async function handleRemove(folder: string) {
@@ -68,13 +86,29 @@ export function FolderManager() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Configured Folders</CardTitle>
-        <CardDescription>
-          Folders the sync engine monitors. Adding a folder creates a{" "}
-          <code className="text-xs">.gitkeep</code> in your repo.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-base">Configured Folders</CardTitle>
+            <CardDescription className="mt-1">
+              Folders the sync engine monitors. Adding a folder creates a{" "}
+              <code className="text-xs">.gitkeep</code> in your repo.
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={discoveredFolders.length > 0 ? reset : discover}
+            disabled={isDiscovering || isMutating}
+            className="shrink-0"
+          >
+            <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
+            {isDiscovering ? "Scanning…" : discoveredFolders.length > 0 ? "Clear" : "Discover"}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
+
+        {/* Configured folders list */}
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-9 w-full" />)}
@@ -101,6 +135,54 @@ export function FolderManager() {
           </ul>
         )}
 
+        {/* Discover results */}
+        {discoverError && (
+          <p className="text-sm text-destructive">{discoverError}</p>
+        )}
+
+        {discoveredFolders.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Found in repo
+              </p>
+              {unconfigured.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleAddAll}
+                  disabled={isMutating}
+                >
+                  Add all ({unconfigured.length})
+                </Button>
+              )}
+            </div>
+            {unconfigured.length === 0 ? (
+              <p className="text-sm text-muted-foreground">All discovered folders are already configured.</p>
+            ) : (
+              <ul className="divide-y rounded-md border">
+                {unconfigured.map((folder) => (
+                  <li key={folder} className="flex items-center justify-between px-3 py-2">
+                    <span className="font-mono text-sm text-muted-foreground">{folder}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      disabled={isMutating}
+                      onClick={() => handleAdd(folder)}
+                      aria-label={`Add ${folder}`}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Manual add */}
         <div className="space-y-1.5">
           <div className="flex gap-2">
             <Input
@@ -112,7 +194,7 @@ export function FolderManager() {
               className="font-mono text-sm"
             />
             <Button
-              onClick={handleAdd}
+              onClick={() => handleAdd()}
               disabled={isMutating || !newFolder.trim()}
               size="sm"
             >

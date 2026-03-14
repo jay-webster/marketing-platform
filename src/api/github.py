@@ -28,6 +28,8 @@ from utils.auth import get_current_user, require_role
 from utils.github_api import (
     GitHubUnavailableError,
     GitHubValidationError,
+    get_default_branch,
+    get_repo_tree,
     scaffold_repository,
     validate_and_check_access,
 )
@@ -615,3 +617,48 @@ async def remove_folder(
             "folders": new_folders,
         }
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /config/discover-folders — scan live repo tree for folders with .md files
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/config/discover-folders",
+    dependencies=[require_role(Role.ADMIN)],
+)
+async def discover_folders(db: AsyncSession = Depends(get_db)):
+    """Scan the connected repo tree and return every directory that contains
+    at least one .md file.  Results are sorted alphabetically and include
+    all depths (e.g. both 'docs' and 'docs/campaigns' appear if both contain
+    .md files directly).
+    """
+    connection = await db.scalar(_active_connection_query())
+    if connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NO_CONNECTION", "message": "No repository is currently connected."},
+        )
+
+    token = decrypt_token(connection.encrypted_token)
+    branch = connection.default_branch or await get_default_branch(
+        connection.repository_url, token
+    )
+
+    try:
+        tree = await get_repo_tree(connection.repository_url, token, branch)
+    except (GitHubValidationError, GitHubUnavailableError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"code": "GITHUB_ERROR", "message": str(exc)},
+        ) from exc
+
+    # Collect unique parent directories for every .md blob
+    folders: set[str] = set()
+    for item in tree:
+        if item.get("type") == "blob" and item["path"].endswith(".md"):
+            parent = item["path"].rsplit("/", 1)[0] if "/" in item["path"] else ""
+            if parent:  # skip root-level .md files — not a "folder"
+                folders.add(parent)
+
+    return {"data": {"folders": sorted(folders)}}
