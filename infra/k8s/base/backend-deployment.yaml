@@ -17,8 +17,27 @@ spec:
     spec:
       serviceAccountName: marketing-platform-backend
       initContainers:
+        # Cloud SQL Auth Proxy as a sidecar init container (K8s 1.29+).
+        # restartPolicy: Always keeps it running alongside subsequent init containers
+        # and main containers — this is what makes localhost:5432 available to migrate.
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          restartPolicy: Always
+          args:
+            - "--port=5432"
+            - "activelab-mktg-platform:us-central1:marketing-platform-db"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
         # Run Alembic migrations before the app starts on every deploy.
         # Migrations are idempotent — safe to run on every pod start.
+        # cloud-sql-proxy (above) is already running by the time this executes.
         - name: migrate
           image: us-central1-docker.pkg.dev/activelab-mktg-platform/marketing-platform/backend:latest
           command: ["python", "-m", "alembic", "-c", "migrations/alembic.ini", "upgrade", "head"]
@@ -160,18 +179,3 @@ spec:
               cpu: "1000m"
               memory: "1Gi"
 
-        # Cloud SQL Auth Proxy sidecar — exposes Cloud SQL on localhost:5432
-        - name: cloud-sql-proxy
-          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
-          args:
-            - "--port=5432"
-            - "activelab-mktg-platform:us-central1:marketing-platform-db"
-          securityContext:
-            runAsNonRoot: true
-          resources:
-            requests:
-              cpu: "50m"
-              memory: "64Mi"
-            limits:
-              cpu: "200m"
-              memory: "128Mi"
