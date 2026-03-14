@@ -50,14 +50,24 @@ def create_tables():
             except Exception:
                 pass
 
-        # Phase 2: Create schema tables
-        async with _test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+        # Phase 2: Wipe schema cleanly (avoids FK drop-order issues) then recreate
+        async with _test_engine.connect() as conn:
+            await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await conn.execute(sa_text("DROP SCHEMA public CASCADE"))
+            await conn.execute(sa_text("CREATE SCHEMA public"))
+            await conn.execute(sa_text("GRANT ALL ON SCHEMA public TO PUBLIC"))
+            # Re-enable pgvector after schema wipe
+            if has_vector:
+                try:
+                    await conn.execute(sa_text("CREATE EXTENSION IF NOT EXISTS vector"))
+                except Exception:
+                    has_vector = False
 
+        # Phase 3: Create tables
+        async with _test_engine.begin() as conn:
             if has_vector:
                 await conn.run_sync(Base.metadata.create_all)
             else:
-                # pgvector not available — skip content_chunks table
                 skip_tables = {"content_chunks"}
                 tables_to_create = [
                     t for t in Base.metadata.sorted_tables if t.name not in skip_tables
@@ -67,8 +77,11 @@ def create_tables():
                 )
 
     async def _teardown():
-        async with _test_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+        async with _test_engine.connect() as conn:
+            await conn.execution_options(isolation_level="AUTOCOMMIT")
+            await conn.execute(sa_text("DROP SCHEMA public CASCADE"))
+            await conn.execute(sa_text("CREATE SCHEMA public"))
+            await conn.execute(sa_text("GRANT ALL ON SCHEMA public TO PUBLIC"))
 
     asyncio.run(_setup())
     yield
@@ -83,17 +96,19 @@ def create_tables():
 async def clean_db():
     """Truncate all tables before each test for a clean slate.
 
-    Tables that were skipped at creation time (e.g. content_chunks when
-    pgvector is unavailable) are silently ignored.
+    Uses TRUNCATE ... CASCADE so FK constraint ordering is handled by Postgres.
+    Tables that don't exist (e.g. content_chunks without pgvector) are skipped.
     """
     async with _test_engine.connect() as conn:
-        for table in reversed(Base.metadata.sorted_tables):
-            try:
-                async with conn.begin_nested():
-                    await conn.execute(table.delete())
-            except Exception:
-                pass  # table may not exist (e.g. content_chunks without pgvector)
-        await conn.commit()
+        await conn.execution_options(isolation_level="AUTOCOMMIT")
+        # Collect existing table names to avoid errors on skipped tables
+        result = await conn.execute(
+            sa_text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+        )
+        existing = {row[0] for row in result}
+        tables = [t.name for t in Base.metadata.sorted_tables if t.name in existing]
+        if tables:
+            await conn.execute(sa_text(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE"))
     yield
 
 
