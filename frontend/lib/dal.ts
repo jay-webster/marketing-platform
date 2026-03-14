@@ -53,7 +53,8 @@ export const getUser = cache(async (): Promise<AuthUser> => {
     throw new Error(`Failed to fetch user: ${response.status}`);
   }
 
-  const data = await response.json();
+  const json = await response.json();
+  const data = json?.request_id !== undefined ? json.data : json;
   return data as AuthUser;
 });
 
