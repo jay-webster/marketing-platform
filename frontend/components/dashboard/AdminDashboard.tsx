@@ -68,7 +68,7 @@ export function AdminDashboard() {
       apiGet<ChatSessionListResponse>("/api/v1/chat/sessions?limit=1"),
   })
 
-  const pendingJobs = jobs?.data.filter(
+  const pendingJobs = (jobs?.data ?? []).filter(
     (j) => j.processing_status === "queued" || j.processing_status === "processing"
   ).length
 
