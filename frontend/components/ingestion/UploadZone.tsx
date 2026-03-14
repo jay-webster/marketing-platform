@@ -5,6 +5,7 @@ import { Upload, X } from "lucide-react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
+import { apiGet } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -18,6 +19,11 @@ const ACCEPTED_TYPES = new Set([
   "text/markdown",
 ])
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
+// Files larger than this go directly to the backend (bypassing Vercel's 4.5MB BFF limit)
+const BFF_SIZE_LIMIT = 4 * 1024 * 1024 // 4 MB
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+
+interface UploadTokenResponse { token: string; expires_in: number }
 
 export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
   const isAdmin = userRole === "admin"
@@ -53,8 +59,20 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
     form.append("folder_name", file.name.replace(/\.[^.]+$/, ""))
 
     try {
-      const res = await fetch(`/api/v1/ingestion/batches`, {
+      // Files > 4MB bypass the Vercel BFF (which has a 4.5MB payload limit)
+      // by fetching a short-lived upload token and POSTing directly to the backend.
+      let uploadUrl = `/api/v1/ingestion/batches`
+      const extraHeaders: Record<string, string> = {}
+
+      if (file.size > BFF_SIZE_LIMIT) {
+        const tokenData = await apiGet<UploadTokenResponse>("/api/v1/ingestion/upload-token")
+        uploadUrl = `${BACKEND_URL}/api/v1/ingestion/batches`
+        extraHeaders["Authorization"] = `Bearer ${tokenData.token}`
+      }
+
+      const res = await fetch(uploadUrl, {
         method: "POST",
+        headers: extraHeaders,
         body: form,
       })
 

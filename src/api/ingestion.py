@@ -20,7 +20,7 @@ from src.models.processed_document import ProcessedDocument, ReviewStatus
 from src.models.repo_structure_config import RepoStructureConfig
 from utils.audit import write_audit
 from src.models.user import Role, User
-from utils.auth import get_current_user, require_role
+from utils.auth import create_access_token, get_current_user, require_role
 from utils.db import get_db
 from utils.extractors import SUPPORTED_EXTENSIONS
 from utils.gcs import delete_from_gcs, upload_to_gcs
@@ -28,6 +28,63 @@ from utils.gcs import delete_from_gcs, upload_to_gcs
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+_UPLOAD_TOKEN_EXPIRE_MINUTES = 5
+
+
+# -----------------------------------------------------------------
+# GET /upload-token — issue a short-lived token for direct uploads
+# -----------------------------------------------------------------
+
+@router.get("/upload-token")
+async def get_upload_token(
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a 5-minute JWT the client can use to POST large files
+    directly to the backend, bypassing the Vercel BFF size limit."""
+    from src.models.session import Session  # noqa: PLC0415
+    from sqlalchemy import select as sa_select  # noqa: PLC0415
+
+    # Reuse the active session_id so get_current_user validation passes
+    result = await db.execute(
+        sa_select(Session)
+        .where(Session.user_id == current_user.id, Session.revoked == False)  # noqa: E712
+        .order_by(Session.expires_at.desc())
+        .limit(1)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail={"error": "No active session", "code": "UNAUTHENTICATED"})
+
+    from datetime import timedelta  # noqa: PLC0415
+    token = create_access_token({
+        "sub": str(current_user.id),
+        "session_id": str(session.id),
+    })
+    # Override expiry to 5 minutes regardless of ACCESS_TOKEN_EXPIRE_MINUTES
+    from jose import jwt as jose_jwt  # noqa: PLC0415
+    from src.config import settings as _settings  # noqa: PLC0415
+    short_token = jose_jwt.encode(
+        {
+            "sub": str(current_user.id),
+            "session_id": str(session.id),
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=_UPLOAD_TOKEN_EXPIRE_MINUTES),
+            "iat": datetime.now(timezone.utc),
+        },
+        _settings.SECRET_KEY,
+        algorithm="HS256",
+    )
+
+    return {
+        "data": {
+            "token": short_token,
+            "expires_in": _UPLOAD_TOKEN_EXPIRE_MINUTES * 60,
+        },
+        "request_id": _request_id(request),
+    }
 
 
 def _recompute_batch_status(batch: IngestionBatch) -> None:
