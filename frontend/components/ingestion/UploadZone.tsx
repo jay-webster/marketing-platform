@@ -19,11 +19,6 @@ const ACCEPTED_TYPES = new Set([
 ])
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 
-const API_URL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-
 export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
   const isAdmin = userRole === "admin"
   const [isDragging, setIsDragging] = useState(false)
@@ -53,12 +48,13 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
     setUploadError(null)
 
     const form = new FormData()
-    form.append("file", file)
+    form.append("files", file)
+    // source_folder_name is a display label for the batch; use the filename stem
+    form.append("folder_name", file.name.replace(/\.[^.]+$/, ""))
 
     try {
-      const res = await fetch(`${API_URL}/api/v1/ingestion/upload`, {
+      const res = await fetch(`/api/v1/ingestion/batches`, {
         method: "POST",
-        credentials: "include",
         body: form,
       })
 
