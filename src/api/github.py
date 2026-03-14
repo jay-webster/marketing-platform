@@ -123,6 +123,10 @@ class UpdateConfigRequest(BaseModel):
     folders: list[str]
 
 
+class AddFolderRequest(BaseModel):
+    folder: str
+
+
 # ---------------------------------------------------------------------------
 # POST /connect
 # ---------------------------------------------------------------------------
@@ -474,5 +478,140 @@ async def update_config(
             "folders": custom_config.folders.get("folders", []),
             "is_default": custom_config.is_default,
             "updated_at": custom_config.updated_at.isoformat(),
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /config/folders — add a single folder
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/config/folders",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[require_role(Role.ADMIN)],
+)
+async def add_folder(
+    body: AddFolderRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _validate_config_folders([body.folder])
+
+    config = await _get_active_config(db)
+    current_folders: list[str] = config.folders.get("folders", []) if config else []
+
+    if body.folder in current_folders:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "FOLDER_ALREADY_EXISTS", "message": f"Folder '{body.folder}' is already configured."},
+        )
+
+    new_folders = current_folders + [body.folder]
+    now = datetime.now(timezone.utc)
+
+    # Upsert custom config
+    custom_config = await db.scalar(
+        select(RepoStructureConfig).where(RepoStructureConfig.is_default == False)  # noqa: E712
+    )
+    if custom_config:
+        custom_config.folders = {"folders": new_folders}
+        custom_config.created_by = current_user.id
+        custom_config.updated_at = now
+    else:
+        custom_config = RepoStructureConfig(
+            folders={"folders": new_folders},
+            is_default=False,
+            created_by=current_user.id,
+            updated_at=now,
+        )
+        db.add(custom_config)
+
+    # Scaffold new folder (best-effort — failure does not block the add)
+    scaffold_outcome = "skipped"
+    conn = await db.scalar(_active_connection_query())
+    if conn:
+        try:
+            token = decrypt_token(conn.encrypted_token)
+            await scaffold_repository(conn.repository_url, token, [body.folder])
+            scaffold_outcome = "success"
+        except GitHubUnavailableError as exc:
+            scaffold_outcome = "failed"
+            logger.warning("Scaffold failed for new folder '%s': %s", body.folder, exc)
+
+    await write_audit(
+        db,
+        action="github_folder_added",
+        actor_id=current_user.id,
+        metadata={"folder": body.folder, "scaffold_outcome": scaffold_outcome},
+    )
+    await db.commit()
+
+    return {
+        "data": {
+            "folder": body.folder,
+            "folders": new_folders,
+            "scaffold_outcome": scaffold_outcome,
+        }
+    }
+
+
+# ---------------------------------------------------------------------------
+# DELETE /config/folders/{folder_name} — remove a single folder
+# ---------------------------------------------------------------------------
+
+@router.delete(
+    "/config/folders/{folder_name:path}",
+    dependencies=[require_role(Role.ADMIN)],
+)
+async def remove_folder(
+    folder_name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from urllib.parse import unquote  # noqa: PLC0415
+    folder_name = unquote(folder_name)
+
+    config = await _get_active_config(db)
+    current_folders: list[str] = config.folders.get("folders", []) if config else []
+
+    if folder_name not in current_folders:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "FOLDER_NOT_FOUND", "message": f"Folder '{folder_name}' is not in the configured list."},
+        )
+
+    new_folders = [f for f in current_folders if f != folder_name]
+    now = datetime.now(timezone.utc)
+
+    # Upsert custom config
+    custom_config = await db.scalar(
+        select(RepoStructureConfig).where(RepoStructureConfig.is_default == False)  # noqa: E712
+    )
+    if custom_config:
+        custom_config.folders = {"folders": new_folders}
+        custom_config.created_by = current_user.id
+        custom_config.updated_at = now
+    else:
+        custom_config = RepoStructureConfig(
+            folders={"folders": new_folders},
+            is_default=False,
+            created_by=current_user.id,
+            updated_at=now,
+        )
+        db.add(custom_config)
+
+    await write_audit(
+        db,
+        action="github_folder_removed",
+        actor_id=current_user.id,
+        metadata={"folder": folder_name},
+    )
+    await db.commit()
+
+    return {
+        "data": {
+            "removed_folder": folder_name,
+            "folders": new_folders,
         }
     }
