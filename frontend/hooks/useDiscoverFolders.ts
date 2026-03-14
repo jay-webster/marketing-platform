@@ -1,13 +1,16 @@
-import { useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+"use client"
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+import { useState } from "react"
+import { apiGet } from "@/lib/api"
+
+interface DiscoverResponse {
+  folders: string[]
+}
 
 export function useDiscoverFolders() {
   const [discoveredFolders, setDiscoveredFolders] = useState<string[]>([])
   const [isDiscovering, setIsDiscovering] = useState(false)
   const [discoverError, setDiscoverError] = useState<string | null>(null)
-  const queryClient = useQueryClient()
 
   async function discover() {
     setIsDiscovering(true)
@@ -15,15 +18,8 @@ export function useDiscoverFolders() {
     setDiscoveredFolders([])
 
     try {
-      const res = await fetch(`${API_URL}/api/v1/github/config/discover-folders`, {
-        credentials: "include",
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body?.detail?.message ?? "Failed to scan repository")
-      }
-      const json = await res.json()
-      setDiscoveredFolders(json?.data?.folders ?? [])
+      const data = await apiGet<DiscoverResponse>("/api/v1/github/config/discover-folders")
+      setDiscoveredFolders(data?.folders ?? [])
     } catch (err) {
       setDiscoverError(err instanceof Error ? err.message : "Failed to scan repository")
     } finally {
