@@ -35,7 +35,16 @@ async def _lifespan(application: FastAPI):
     from utils.db import AsyncSessionLocal
     from src.models.user import User, Role
     from src.models.repo_structure_config import RepoStructureConfig
-    from utils.queue import startup_recovery, start_queue_workers, stop_queue_workers, start_indexing_workers, stop_indexing_workers
+    from utils.queue import (
+        startup_recovery,
+        start_queue_workers,
+        stop_queue_workers,
+        start_indexing_workers,
+        stop_indexing_workers,
+        start_sync_scheduler,
+        stop_sync_scheduler,
+    )
+    from utils.sync import recover_interrupted_syncs
 
     # Warn if initial admin token is still set after an admin exists
     if settings.INITIAL_ADMIN_TOKEN:
@@ -80,15 +89,20 @@ async def _lifespan(application: FastAPI):
     # Reset any documents stuck in "processing" from a prior crash
     await startup_recovery()
 
+    # Mark any sync runs left in-progress from a prior crash as INTERRUPTED
+    await recover_interrupted_syncs()
+
     # Start queue workers
     await start_queue_workers(concurrency=settings.WORKER_CONCURRENCY)
     await start_indexing_workers(concurrency=settings.KB_INDEX_CONCURRENCY)
+    await start_sync_scheduler(interval_minutes=settings.SYNC_SCHEDULE_MINUTES)
 
     yield
 
     # Graceful shutdown
     await stop_queue_workers()
     await stop_indexing_workers()
+    await stop_sync_scheduler()
 
 
 def create_app() -> FastAPI:
@@ -142,6 +156,7 @@ def create_app() -> FastAPI:
     from src.api.users import router as users_router
     from src.api.routes.tenant import router as tenant_router
     from src.api.github import router as github_router
+    from src.api.sync import router as sync_router
     from src.api.ingestion import router as ingestion_router
     from src.api.chat import router as chat_router
     from src.api.knowledge_base import router as kb_router
@@ -151,6 +166,7 @@ def create_app() -> FastAPI:
     application.include_router(users_router, prefix="/api/v1")
     application.include_router(tenant_router, prefix="/api/v1")
     application.include_router(github_router, prefix="/api/v1")
+    application.include_router(sync_router, prefix="/api/v1")
     application.include_router(ingestion_router, prefix="/api/v1")
     application.include_router(chat_router, prefix="/api/v1")
     application.include_router(kb_router, prefix="/api/v1")
