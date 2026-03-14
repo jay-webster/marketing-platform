@@ -37,8 +37,8 @@ import {
 import type { GitHubConnection } from "@/lib/types"
 
 const connectSchema = z.object({
-  repo_url: z.string().url("Must be a valid GitHub repository URL"),
-  personal_access_token: z.string().min(1, "Personal access token is required"),
+  repository_url: z.string().url("Must be a valid GitHub repository URL"),
+  token: z.string().min(1, "Personal access token is required"),
 })
 
 type ConnectValues = z.infer<typeof connectSchema>
@@ -47,9 +47,8 @@ const STATUS_VARIANTS: Record<
   GitHubConnection["status"],
   "default" | "secondary" | "destructive"
 > = {
-  connected: "default",
-  disconnected: "secondary",
-  error: "destructive",
+  active: "default",
+  inactive: "secondary",
 }
 
 export function ConnectionCard({
@@ -63,7 +62,7 @@ export function ConnectionCard({
 
   const form = useForm<ConnectValues>({
     resolver: zodResolver(connectSchema),
-    defaultValues: { repo_url: "", personal_access_token: "" },
+    defaultValues: { repository_url: "", token: "" },
   })
 
   async function onConnect(values: ConnectValues) {
@@ -96,19 +95,21 @@ export function ConnectionCard({
                 {connection.status}
               </Badge>
             </div>
-            <CardDescription>{connection.repo_url}</CardDescription>
+            <CardDescription>{connection.repository_url}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-muted-foreground">Default Branch</p>
-                <p className="font-medium">{connection.default_branch}</p>
+                <p className="text-muted-foreground">Connected</p>
+                <p className="font-medium">
+                  {new Date(connection.connected_at).toLocaleString()}
+                </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Last Synced</p>
+                <p className="text-muted-foreground">Last Scaffolded</p>
                 <p className="font-medium">
-                  {connection.last_synced_at
-                    ? new Date(connection.last_synced_at).toLocaleString()
+                  {connection.last_scaffolded_at
+                    ? new Date(connection.last_scaffolded_at).toLocaleString()
                     : "Never"}
                 </p>
               </div>
@@ -163,7 +164,7 @@ export function ConnectionCard({
           <form onSubmit={form.handleSubmit(onConnect)} className="space-y-4">
             <FormField
               control={form.control}
-              name="repo_url"
+              name="repository_url"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Repository URL</FormLabel>
@@ -176,7 +177,7 @@ export function ConnectionCard({
             />
             <FormField
               control={form.control}
-              name="personal_access_token"
+              name="token"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Personal Access Token</FormLabel>

@@ -19,7 +19,8 @@ export default async function GitHubPage() {
       cache: "no-store",
     })
     if (res.ok) {
-      connection = await res.json()
+      const json = await res.json()
+      connection = json?.data ?? json
     }
     // 404 means no connection — leave as null
   }

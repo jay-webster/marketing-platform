@@ -133,15 +133,16 @@ export interface Invitation {
 
 
 // GitHub Connection
-export type ConnectionStatus = "connected" | "disconnected" | "error";
+export type ConnectionStatus = "active" | "inactive";
 
 export interface GitHubConnection {
-  id: string;
-  repo_url: string;
-  default_branch: string;
+  connection_id: string;
+  repository_url: string;
   status: ConnectionStatus;
-  last_synced_at: string | null;
-  created_at: string;
+  connected_at: string;
+  last_validated_at: string;
+  last_scaffolded_at: string | null;
+  token_on_file: boolean;
 }
 
 // Shared / API Envelope
