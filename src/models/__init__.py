@@ -11,6 +11,8 @@ from src.models.knowledge_base_document import KBIndexStatus, KnowledgeBaseDocum
 from src.models.processed_document import ProcessedDocument, ReviewStatus
 from src.models.repo_structure_config import RepoStructureConfig
 from src.models.scaffolding_run import ScaffoldingRun
+from src.models.sync_run import SyncOutcome, SyncRun, SyncTriggerType
+from src.models.synced_document import SyncedDocument
 from src.models.session import Session
 from src.models.tenant import Tenant
 from src.models.user import Role, User, UserStatus
@@ -36,6 +38,10 @@ __all__ = [
     "Role",
     "ScaffoldingRun",
     "Session",
+    "SyncedDocument",
+    "SyncOutcome",
+    "SyncRun",
+    "SyncTriggerType",
     "Tenant",
     "User",
     "UserStatus",

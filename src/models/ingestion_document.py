@@ -15,7 +15,9 @@ class ProcessingStatus(str, enum.Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
-    REJECTED = "rejected"                  # admin rejected; GCS file deleted
+    REJECTED = "rejected"                  # admin rejected or closed PR
+    PR_OPEN = "pr_open"                    # worker created branch + PR in GitHub
+    MERGED = "merged"                      # admin merged PR in-app
 
 
 class IngestionDocument(Base):
@@ -47,3 +49,7 @@ class IngestionDocument(Base):
         DateTime(timezone=True), nullable=True
     )
     reprocessing_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    destination_folder: Mapped[str | None] = mapped_column(Text, nullable=True)
+    github_branch: Mapped[str | None] = mapped_column(Text, nullable=True)
+    github_pr_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    github_pr_url: Mapped[str | None] = mapped_column(Text, nullable=True)

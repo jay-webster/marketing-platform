@@ -230,3 +230,375 @@ async def scaffold_repository(
         raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
 
     return created, skipped
+
+
+# ---------------------------------------------------------------------------
+# Sync — read-only repo traversal (T013)
+# ---------------------------------------------------------------------------
+
+async def get_default_branch(
+    repository_url: str,
+    token: str,
+) -> str:
+    """Return the default branch name for the repository."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{_GITHUB_API}/repos/{owner}/{repo}", headers=headers)
+            if resp.status_code == 404:
+                raise GitHubValidationError("REPO_NOT_FOUND", "Repository not found.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error.")
+            return resp.json()["default_branch"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def get_repo_tree(
+    repository_url: str,
+    token: str,
+    branch: str,
+) -> list[dict]:
+    """
+    Return a flat list of all blob entries in the repo tree (recursive).
+
+    Each entry is the raw GitHub tree item dict:
+        {"path": "...", "mode": "...", "type": "blob", "sha": "...", "size": N, "url": "..."}
+
+    Only "blob" type entries (files) are returned — trees (directories) are excluded.
+    """
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    url = f"{_GITHUB_API}/repos/{owner}/{repo}/git/trees/{branch}?recursive=1"
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                raise GitHubValidationError("BRANCH_NOT_FOUND", f"Branch '{branch}' not found.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error fetching repo tree.")
+            data = resp.json()
+            return [item for item in data.get("tree", []) if item.get("type") == "blob"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def get_file_content(
+    repository_url: str,
+    token: str,
+    path: str,
+    ref: str,
+) -> tuple[str, str]:
+    """
+    Fetch file content by path and ref.
+
+    Returns:
+        (decoded_content, blob_sha)
+
+    Raises:
+        GitHubValidationError("FILE_NOT_FOUND"): if path does not exist on ref.
+        GitHubUnavailableError: on timeout or 5xx.
+    """
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    url = f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{path}?ref={ref}"
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(url, headers=headers)
+            if resp.status_code == 404:
+                raise GitHubValidationError("FILE_NOT_FOUND", f"File '{path}' not found on ref '{ref}'.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error fetching file content.")
+            data = resp.json()
+            raw = base64.b64decode(data["content"].replace("\n", "")).decode("utf-8", errors="replace")
+            return raw, data["sha"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Branch and file mutations (T014)
+# ---------------------------------------------------------------------------
+
+async def get_branch_sha(
+    repository_url: str,
+    token: str,
+    branch: str,
+) -> str:
+    """Return the HEAD commit SHA for the given branch."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/git/ref/heads/{branch}",
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                raise GitHubValidationError("BRANCH_NOT_FOUND", f"Branch '{branch}' not found.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error.")
+            return resp.json()["object"]["sha"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def create_branch(
+    repository_url: str,
+    token: str,
+    branch_name: str,
+    from_sha: str,
+) -> None:
+    """Create a new branch pointing at from_sha."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/git/refs",
+                headers=headers,
+                json={"ref": f"refs/heads/{branch_name}", "sha": from_sha},
+            )
+            if resp.status_code == 422:
+                # Branch already exists — idempotent
+                return
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error creating branch.")
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def commit_file(
+    repository_url: str,
+    token: str,
+    branch: str,
+    path: str,
+    content: str,
+    message: str,
+    existing_sha: str | None = None,
+) -> str:
+    """
+    Create or update a file on a branch via the GitHub contents API.
+
+    Args:
+        existing_sha: Current blob SHA if updating an existing file; None to create.
+
+    Returns:
+        The new blob SHA of the committed file.
+    """
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    encoded = base64.b64encode(content.encode()).decode()
+    body: dict = {"message": message, "content": encoded, "branch": branch}
+    if existing_sha:
+        body["sha"] = existing_sha
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{path}",
+                headers=headers,
+                json=body,
+            )
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error committing file.")
+            if resp.status_code not in (200, 201):
+                raise GitHubValidationError(
+                    "COMMIT_FAILED",
+                    f"Unexpected status {resp.status_code} committing '{path}'.",
+                )
+            return resp.json()["content"]["sha"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Pull request operations (T015)
+# ---------------------------------------------------------------------------
+
+async def create_pr(
+    repository_url: str,
+    token: str,
+    title: str,
+    body: str,
+    head: str,
+    base: str,
+) -> tuple[int, str]:
+    """
+    Open a pull request.
+
+    Returns:
+        (pr_number, pr_html_url)
+    """
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.post(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/pulls",
+                headers=headers,
+                json={"title": title, "body": body, "head": head, "base": base},
+            )
+            if resp.status_code == 422:
+                # PR already exists for this branch
+                data = resp.json()
+                raise GitHubValidationError(
+                    "PR_ALREADY_EXISTS",
+                    data.get("message", "A pull request already exists for this branch."),
+                )
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error creating pull request.")
+            if resp.status_code not in (200, 201):
+                raise GitHubValidationError(
+                    "PR_CREATION_FAILED",
+                    f"Unexpected status {resp.status_code} creating pull request.",
+                )
+            data = resp.json()
+            return data["number"], data["html_url"]
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def get_pr(
+    repository_url: str,
+    token: str,
+    pr_number: int,
+) -> dict:
+    """Return the raw GitHub PR object for the given PR number."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}",
+                headers=headers,
+            )
+            if resp.status_code == 404:
+                raise GitHubValidationError("PR_NOT_FOUND", f"PR #{pr_number} not found.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error fetching pull request.")
+            return resp.json()
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def delete_file(
+    repository_url: str,
+    token: str,
+    path: str,
+    file_sha: str,
+    message: str,
+    branch: str,
+) -> None:
+    """Delete a file from a branch via the GitHub contents API."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.request(
+                "DELETE",
+                f"{_GITHUB_API}/repos/{owner}/{repo}/contents/{path}",
+                headers=headers,
+                json={"message": message, "sha": file_sha, "branch": branch},
+            )
+            if resp.status_code == 404:
+                return  # Already deleted — idempotent
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error deleting file.")
+            if resp.status_code not in (200, 201):
+                raise GitHubValidationError(
+                    "DELETE_FAILED",
+                    f"Unexpected status {resp.status_code} deleting '{path}'.",
+                )
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def merge_pr(
+    repository_url: str,
+    token: str,
+    pr_number: int,
+    merge_method: str = "merge",
+    commit_message: str | None = None,
+) -> None:
+    """
+    Merge an open pull request.
+
+    Raises:
+        GitHubValidationError("PR_NOT_MERGEABLE"): if the PR cannot be merged.
+        GitHubUnavailableError: on timeout or 5xx.
+    """
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+    body: dict = {"merge_method": merge_method}
+    if commit_message:
+        body["commit_message"] = commit_message
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.put(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}/merge",
+                headers=headers,
+                json=body,
+            )
+            if resp.status_code == 405:
+                raise GitHubValidationError("PR_NOT_MERGEABLE", "The pull request is not mergeable.")
+            if resp.status_code == 409:
+                raise GitHubValidationError("PR_HEAD_MODIFIED", "The pull request head was modified.")
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error merging pull request.")
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc
+
+
+async def close_pr(
+    repository_url: str,
+    token: str,
+    pr_number: int,
+) -> None:
+    """Close a pull request without merging."""
+    owner, repo = parse_repository_url(repository_url)
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.patch(
+                f"{_GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}",
+                headers=headers,
+                json={"state": "closed"},
+            )
+            if resp.status_code >= 500:
+                raise GitHubUnavailableError("GitHub returned a server error closing pull request.")
+    except httpx.TimeoutException:
+        raise GitHubUnavailableError("GitHub could not be reached within the timeout period.")
+    except httpx.RequestError as exc:
+        raise GitHubUnavailableError(f"GitHub could not be reached: {type(exc).__name__}") from exc

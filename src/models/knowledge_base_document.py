@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base
@@ -21,12 +22,18 @@ class KnowledgeBaseDocument(Base):
     __tablename__ = "knowledge_base_documents"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    processed_document_id: Mapped[uuid.UUID] = mapped_column(
+    processed_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
         ForeignKey("processed_documents.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         unique=True,
+    )
+    synced_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("synced_documents.id", ondelete="CASCADE"),
+        nullable=True,
     )
     index_status: Mapped[str] = mapped_column(
         Text, nullable=False, default=KBIndexStatus.QUEUED.value
@@ -54,6 +61,9 @@ class KnowledgeBaseDocument(Base):
     chunks: Mapped[list["ContentChunk"]] = relationship(  # noqa: F821
         "ContentChunk", back_populates="kb_document", cascade="all, delete-orphan"
     )
+    synced_document: Mapped["SyncedDocument | None"] = relationship(  # noqa: F821
+        "SyncedDocument", back_populates="kb_document"
+    )
 
     __table_args__ = (
         # Partial index for queue worker — only rows needing processing
@@ -66,5 +76,11 @@ class KnowledgeBaseDocument(Base):
             "idx_kb_documents_indexed",
             "indexed_at",
             postgresql_where="index_status = 'indexed'",
+        ),
+        Index(
+            "idx_kb_documents_synced_document",
+            "synced_document_id",
+            unique=True,
+            postgresql_where="synced_document_id IS NOT NULL",
         ),
     )
