@@ -105,6 +105,36 @@ async def list_users(
 
 
 # -----------------------------------------------------------------
+# GET /users/invitations — list all invitations (admin only)
+# -----------------------------------------------------------------
+
+@router.get("/invitations")
+async def list_invitations(
+    request: Request,
+    current_user: User = require_role(Role.ADMIN),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Invitation).order_by(Invitation.issued_at.desc())
+    )
+    invitations = result.scalars().all()
+    return {
+        "data": [
+            {
+                "id": str(inv.id),
+                "invited_email": inv.invited_email,
+                "assigned_role": inv.assigned_role,
+                "status": inv.status,
+                "expires_at": inv.expires_at.isoformat(),
+                "created_at": inv.issued_at.isoformat(),
+            }
+            for inv in invitations
+        ],
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
 # POST /users/invite
 # -----------------------------------------------------------------
 
