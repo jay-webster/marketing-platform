@@ -55,9 +55,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const data: { access_token: string } = await backendResponse.json();
+  const body = await backendResponse.json();
+  const accessToken: string | undefined =
+    body?.data?.access_token ?? body?.access_token;
 
-  if (!data.access_token) {
+  if (!accessToken) {
     return NextResponse.json(
       { error: "No token received from server" },
       { status: 500 }
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
   }
 
   const cookieStore = await cookies();
-  cookieStore.set("auth-token", data.access_token, {
+  cookieStore.set("auth-token", accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
