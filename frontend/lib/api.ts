@@ -70,8 +70,10 @@ export async function apiFetch<T = unknown>(
   }
 
   const json = await response.json();
-  // Unwrap FastAPI envelope: { data: ..., request_id: ... }
-  return (json?.request_id !== undefined ? json.data : json) as T;
+  // Unwrap FastAPI envelope: { data: ... }
+  // The backend wraps all success responses as { data: <payload> }.
+  // request_id is added to response headers only, never the JSON body.
+  return (json?.data !== undefined ? json.data : json) as T;
 }
 
 export function apiGet<T = unknown>(
