@@ -42,8 +42,15 @@ export async function POST(request: NextRequest) {
     const errorData = await backendResponse.json().catch(() => ({
       detail: "Authentication failed",
     }));
+    const raw = errorData.detail;
+    const message =
+      typeof raw === "string"
+        ? raw
+        : raw && typeof raw === "object"
+        ? (raw as Record<string, string>).error ?? "Authentication failed"
+        : "Authentication failed";
     return NextResponse.json(
-      { error: errorData.detail ?? "Authentication failed" },
+      { error: message },
       { status: backendResponse.status }
     );
   }
