@@ -17,6 +17,7 @@ from src.models.ingestion_batch import BatchStatus, IngestionBatch
 from src.models.ingestion_document import IngestionDocument, ProcessingStatus
 from src.models.knowledge_base_document import KBIndexStatus, KnowledgeBaseDocument
 from src.models.processed_document import ProcessedDocument, ReviewStatus
+from src.models.repo_structure_config import RepoStructureConfig
 from utils.audit import write_audit
 from src.models.user import Role, User
 from utils.auth import get_current_user, require_role
@@ -27,6 +28,17 @@ from utils.gcs import delete_from_gcs, upload_to_gcs
 router = APIRouter(prefix="/ingestion", tags=["ingestion"])
 
 MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _recompute_batch_status(batch: IngestionBatch) -> None:
+    terminal = batch.completed_count + batch.failed_count
+    if terminal >= batch.total_documents:
+        if batch.failed_count == 0:
+            batch.status = BatchStatus.COMPLETED.value
+        else:
+            batch.status = BatchStatus.COMPLETED_WITH_FAILURES.value
+    else:
+        batch.status = BatchStatus.IN_PROGRESS.value
 
 
 # -----------------------------------------------------------------
@@ -579,10 +591,15 @@ async def list_pending_documents(
 # POST /documents/{doc_id}/approve — Admin: approve pending document
 # -----------------------------------------------------------------
 
+class ApproveRequest(BaseModel):
+    destination_folder: str
+
+
 @router.post("/documents/{doc_id}/approve", dependencies=[require_role(Role.ADMIN)])
 async def approve_document(
     request: Request,
     doc_id: uuid.UUID,
+    body: ApproveRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -598,6 +615,19 @@ async def approve_document(
             detail={"error": "Document is not pending approval", "code": "DOCUMENT_NOT_PENDING", "request_id": _request_id(request)},
         )
 
+    # Validate destination_folder against active repo config
+    config_result = await db.execute(
+        select(RepoStructureConfig).where(RepoStructureConfig.is_default == True).limit(1)  # noqa: E712
+    )
+    repo_config = config_result.scalar_one_or_none()
+    configured_folders: list[str] = (repo_config.folders.get("folders", []) if repo_config else [])
+    if body.destination_folder not in configured_folders:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": f"Folder '{body.destination_folder}' is not configured", "code": "FOLDER_NOT_CONFIGURED", "request_id": _request_id(request)},
+        )
+
+    doc.destination_folder = body.destination_folder
     doc.processing_status = ProcessingStatus.QUEUED.value
     doc.queued_at = datetime.now(timezone.utc)
 
@@ -606,9 +636,291 @@ async def approve_document(
         "ingestion_document_approved",
         actor_id=current_user.id,
         target_id=doc_id,
-        metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename},
+        metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename, "destination_folder": body.destination_folder},
     )
     await db.commit()
+
+    return {
+        "data": {"id": str(doc.id), "processing_status": doc.processing_status, "destination_folder": doc.destination_folder},
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# GET /prs — Admin: list all open PRs
+# -----------------------------------------------------------------
+
+@router.get("/prs", dependencies=[require_role(Role.ADMIN)])
+async def list_open_prs(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(IngestionDocument, User.display_name, User.email)
+        .join(IngestionBatch, IngestionBatch.id == IngestionDocument.batch_id)
+        .join(User, User.id == IngestionBatch.submitted_by)
+        .where(IngestionDocument.processing_status == ProcessingStatus.PR_OPEN.value)
+        .order_by(IngestionDocument.queued_at.desc())
+    )
+    count_result = await db.execute(
+        select(IngestionDocument).where(IngestionDocument.processing_status == ProcessingStatus.PR_OPEN.value)
+    )
+    total = len(count_result.scalars().all())
+
+    result = await db.execute(stmt.limit(limit).offset(offset))
+    rows = result.all()
+
+    data = [
+        {
+            "id": str(doc.id),
+            "original_filename": doc.original_filename,
+            "destination_folder": doc.destination_folder,
+            "github_branch": doc.github_branch,
+            "github_pr_number": doc.github_pr_number,
+            "github_pr_url": doc.github_pr_url,
+            "submitted_by_name": display_name,
+            "submitted_by_email": email,
+            "queued_at": doc.queued_at.isoformat() if doc.queued_at else None,
+        }
+        for doc, display_name, email in rows
+    ]
+
+    return {
+        "data": data,
+        "total": total,
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# GET /documents/{doc_id}/pr — Admin: PR review data
+# -----------------------------------------------------------------
+
+@router.get("/documents/{doc_id}/pr", dependencies=[require_role(Role.ADMIN)])
+async def get_pr_review(
+    request: Request,
+    doc_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await db.get(IngestionDocument, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "Document not found", "code": "DOCUMENT_NOT_FOUND"})
+    if doc.processing_status != ProcessingStatus.PR_OPEN.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "Document does not have an open PR", "code": "DOCUMENT_NOT_PR_OPEN"},
+        )
+
+    pd_result = await db.execute(
+        select(ProcessedDocument).where(ProcessedDocument.ingestion_document_id == doc_id)
+    )
+    pd = pd_result.scalar_one_or_none()
+
+    config_result = await db.execute(
+        select(RepoStructureConfig).where(RepoStructureConfig.is_default == True).limit(1)  # noqa: E712
+    )
+    repo_config = config_result.scalar_one_or_none()
+    configured_folders: list[str] = (repo_config.folders.get("folders", []) if repo_config else [])
+
+    return {
+        "data": {
+            "id": str(doc.id),
+            "original_filename": doc.original_filename,
+            "destination_folder": doc.destination_folder,
+            "github_branch": doc.github_branch,
+            "github_pr_number": doc.github_pr_number,
+            "github_pr_url": doc.github_pr_url,
+            "markdown_content": pd.markdown_content if pd else "",
+            "current_folder": doc.destination_folder,
+            "configured_folders": configured_folders,
+        },
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# POST /documents/{doc_id}/pr/merge — Admin: merge PR
+# -----------------------------------------------------------------
+
+class PRMergeRequest(BaseModel):
+    destination_folder: Optional[str] = None
+
+
+@router.post("/documents/{doc_id}/pr/merge", dependencies=[require_role(Role.ADMIN)])
+async def merge_pr_endpoint(
+    request: Request,
+    doc_id: uuid.UUID,
+    body: PRMergeRequest = PRMergeRequest(),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from src.models.github_connection import GitHubConnection  # noqa: PLC0415
+    from utils.crypto import decrypt_token  # noqa: PLC0415
+    from utils.github_api import (  # noqa: PLC0415
+        merge_pr as _merge_pr,
+        get_file_content,
+        delete_file,
+        commit_file,
+        GitHubUnavailableError,
+    )
+    from utils.sync import run_sync  # noqa: PLC0415
+    from src.models.sync_run import SyncTriggerType  # noqa: PLC0415
+
+    doc = await db.get(IngestionDocument, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "Document not found", "code": "DOCUMENT_NOT_FOUND"})
+    if doc.processing_status != ProcessingStatus.PR_OPEN.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "Document does not have an open PR", "code": "DOCUMENT_NOT_PR_OPEN"},
+        )
+
+    conn_result = await db.execute(
+        select(GitHubConnection).where(GitHubConnection.status == "active").limit(1)
+    )
+    conn = conn_result.scalar_one_or_none()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"error": "No active GitHub connection", "code": "GITHUB_UNAVAILABLE"})
+
+    try:
+        token = decrypt_token(conn.encrypted_token)
+        final_folder = doc.destination_folder
+
+        # Optionally move file to a different folder before merging
+        if body.destination_folder and body.destination_folder != doc.destination_folder:
+            import re as _re  # noqa: PLC0415
+            import os as _os  # noqa: PLC0415
+            base_name = _os.path.splitext(doc.original_filename)[0]
+            slug = _re.sub(r"[^a-z0-9]+", "-", base_name.lower()).strip("-")[:40]
+
+            old_path = f"{doc.destination_folder}/{slug}.md"
+            new_path = f"{body.destination_folder}/{slug}.md"
+
+            _, old_sha = await get_file_content(conn.repository_url, token, old_path, ref=doc.github_branch)
+            await delete_file(conn.repository_url, token, old_path, old_sha,
+                              f"ingest: move to {body.destination_folder}", doc.github_branch)
+            pd_result = await db.execute(
+                select(ProcessedDocument).where(ProcessedDocument.ingestion_document_id == doc_id)
+            )
+            pd = pd_result.scalar_one_or_none()
+            await commit_file(conn.repository_url, token,
+                              branch=doc.github_branch, path=new_path,
+                              content=(pd.markdown_content if pd else ""),
+                              message=f"ingest: add to {body.destination_folder}")
+            final_folder = body.destination_folder
+
+        await _merge_pr(conn.repository_url, token, doc.github_pr_number, merge_method=settings.GITHUB_MERGE_METHOD)
+
+    except GitHubUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": str(exc), "code": "GITHUB_UNAVAILABLE", "request_id": _request_id(request)},
+        ) from exc
+
+    doc.processing_status = ProcessingStatus.MERGED.value
+    doc.destination_folder = final_folder
+
+    # Update batch completed counter
+    batch = await db.get(IngestionBatch, doc.batch_id)
+    if batch:
+        batch.completed_count += 1
+        _recompute_batch_status(batch)
+
+    await write_audit(db, "ingestion_pr_merged", actor_id=current_user.id, target_id=doc_id,
+                      metadata={"batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number, "merged_to_folder": final_folder})
+    await db.commit()
+
+    # Trigger re-sync (fire-and-forget)
+    import asyncio  # noqa: PLC0415
+    asyncio.create_task(run_sync(connection_id=conn.id, triggered_by=current_user.id, trigger_type=SyncTriggerType.MANUAL.value))
+
+    # Notify submitter (best-effort)
+    try:
+        from utils.email import send_pr_merged_notification  # noqa: PLC0415
+        batch_result = await db.get(IngestionBatch, doc.batch_id)
+        if batch_result:
+            user_result = await db.get(User, batch_result.submitted_by)
+            if user_result:
+                await send_pr_merged_notification(user_result.email, doc.original_filename, user_result.display_name)
+    except Exception:
+        pass
+
+    return {
+        "data": {
+            "id": str(doc.id),
+            "processing_status": doc.processing_status,
+            "merged_to_folder": final_folder,
+            "sync_triggered": True,
+        },
+        "request_id": _request_id(request),
+    }
+
+
+# -----------------------------------------------------------------
+# POST /documents/{doc_id}/pr/close — Admin: close (reject) PR
+# -----------------------------------------------------------------
+
+@router.post("/documents/{doc_id}/pr/close", dependencies=[require_role(Role.ADMIN)])
+async def close_pr_endpoint(
+    request: Request,
+    doc_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from src.models.github_connection import GitHubConnection  # noqa: PLC0415
+    from utils.crypto import decrypt_token  # noqa: PLC0415
+    from utils.github_api import close_pr as _close_pr, GitHubUnavailableError  # noqa: PLC0415
+
+    doc = await db.get(IngestionDocument, doc_id)
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"error": "Document not found", "code": "DOCUMENT_NOT_FOUND"})
+    if doc.processing_status != ProcessingStatus.PR_OPEN.value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error": "Document does not have an open PR", "code": "DOCUMENT_NOT_PR_OPEN"},
+        )
+
+    conn_result = await db.execute(
+        select(GitHubConnection).where(GitHubConnection.status == "active").limit(1)
+    )
+    conn = conn_result.scalar_one_or_none()
+    if conn is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"error": "No active GitHub connection", "code": "GITHUB_UNAVAILABLE"})
+
+    try:
+        token = decrypt_token(conn.encrypted_token)
+        await _close_pr(conn.repository_url, token, doc.github_pr_number)
+    except GitHubUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": str(exc), "code": "GITHUB_UNAVAILABLE", "request_id": _request_id(request)},
+        ) from exc
+
+    doc.processing_status = ProcessingStatus.REJECTED.value
+
+    # Update batch failure counter
+    batch = await db.get(IngestionBatch, doc.batch_id)
+    if batch:
+        batch.failed_count += 1
+        _recompute_batch_status(batch)
+
+    await write_audit(db, "ingestion_pr_closed", actor_id=current_user.id, target_id=doc_id,
+                      metadata={"batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number})
+    await db.commit()
+
+    # Notify submitter (best-effort)
+    try:
+        from utils.email import send_pr_rejected_notification  # noqa: PLC0415
+        batch_result = await db.get(IngestionBatch, doc.batch_id)
+        if batch_result:
+            user_result = await db.get(User, batch_result.submitted_by)
+            if user_result:
+                await send_pr_rejected_notification(user_result.email, doc.original_filename, user_result.display_name)
+    except Exception:
+        pass
 
     return {
         "data": {"id": str(doc.id), "processing_status": doc.processing_status},
