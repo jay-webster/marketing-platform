@@ -74,7 +74,7 @@ async def _run_sync_background(
 @router.post(
     "/sync",
     status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(require_role(Role.ADMIN))],
+    dependencies=[require_role(Role.ADMIN)],
 )
 async def trigger_sync(
     background_tasks: BackgroundTasks,
@@ -176,7 +176,7 @@ async def get_sync_status(
 
 @router.get(
     "/sync/runs",
-    dependencies=[Depends(require_role(Role.ADMIN))],
+    dependencies=[require_role(Role.ADMIN)],
 )
 async def list_sync_runs(
     limit: int = 20,
