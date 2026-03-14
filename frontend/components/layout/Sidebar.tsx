@@ -16,58 +16,28 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import type { AuthUser } from "@/lib/types"
 
-const NAV_LINKS = [
-  {
-    href: "/",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    roles: ["admin", "marketer", "marketing_manager"],
-    exact: true,
-  },
-  {
-    href: "/chat",
-    label: "Chat",
-    icon: MessageSquare,
-    roles: ["admin", "marketer", "marketing_manager"],
-    exact: false,
-  },
-  {
-    href: "/content",
-    label: "Content",
-    icon: FileText,
-    roles: ["admin", "marketer", "marketing_manager"],
-    exact: false,
-  },
-  {
-    href: "/ingestion",
-    label: "Ingestion",
-    icon: Upload,
-    roles: ["admin", "marketer", "marketing_manager"],
-    exact: false,
-  },
-  {
-    href: "/github",
-    label: "GitHub",
-    icon: GitBranch,
-    roles: ["admin"],
-    exact: false,
-  },
-  {
-    href: "/users",
-    label: "Users",
-    icon: Users,
-    roles: ["admin"],
-    exact: false,
-  },
+// Admin nav: Dashboard first, then operational tools
+const ADMIN_NAV_LINKS = [
+  { href: "/",          label: "Dashboard", icon: LayoutDashboard, exact: true  },
+  { href: "/chat",      label: "Chat",      icon: MessageSquare,   exact: false },
+  { href: "/content",   label: "Content",   icon: FileText,        exact: false },
+  { href: "/ingestion", label: "Ingestion", icon: Upload,          exact: false },
+  { href: "/github",    label: "GitHub",    icon: GitBranch,       exact: false },
+  { href: "/users",     label: "Users",     icon: Users,           exact: false },
+] as const
+
+// Non-admin nav: Chat is the primary entry point
+const MARKETER_NAV_LINKS = [
+  { href: "/chat",      label: "Chat",      icon: MessageSquare,   exact: false },
+  { href: "/content",   label: "Content",   icon: FileText,        exact: false },
+  { href: "/ingestion", label: "Ingestion", icon: Upload,          exact: false },
 ] as const
 
 export function Sidebar({ user }: { user: AuthUser }) {
   const pathname = usePathname()
   const router = useRouter()
 
-  const visibleLinks = NAV_LINKS.filter((link) =>
-    (link.roles as readonly string[]).includes(user.role)
-  )
+  const visibleLinks = user.role === "admin" ? ADMIN_NAV_LINKS : MARKETER_NAV_LINKS
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" })
