@@ -80,8 +80,10 @@ async def list_content(
     rows = rows_result.all()
 
     return {
-        "data": [_synced_doc_response(doc, kb) for doc, kb in rows],
-        "total": total,
+        "data": {
+            "items": [_synced_doc_response(doc, kb) for doc, kb in rows],
+            "total": total,
+        },
         "request_id": _request_id(request),
     }
 

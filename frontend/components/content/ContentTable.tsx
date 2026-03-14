@@ -40,7 +40,7 @@ const STATUS_VARIANTS: Record<
 }
 
 interface ContentResponse {
-  data: SyncedContent[]
+  items: SyncedContent[]
   total: number
 }
 
@@ -72,7 +72,7 @@ export function ContentTable({ offset }: { offset: number }) {
   })
 
   // Derive unique folders from current result set for the filter
-  const folders = Array.from(new Set((data?.data ?? []).map((d) => d.folder))).sort()
+  const folders = Array.from(new Set((data?.items ?? []).map((d) => d.folder))).sort()
 
   function navigate(newOffset: number) {
     const params = new URLSearchParams(searchParams.toString())
@@ -94,7 +94,7 @@ export function ContentTable({ offset }: { offset: number }) {
     )
   }
 
-  const items = data?.data ?? []
+  const items = data?.items ?? []
   const total = data?.total ?? 0
   const hasPrev = offset > 0
   const hasNext = offset + PAGE_SIZE < total
