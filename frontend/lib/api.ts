@@ -48,17 +48,26 @@ export async function apiFetch<T = unknown>(
       window.location.href = "/login";
     }
 
-    let errorBody: Partial<APIError> = {};
+    let errorBody: Record<string, unknown> = {};
     try {
       errorBody = await response.json();
     } catch {
       // Response body is not JSON — use status text
     }
 
+    // Backend may return detail as a string or as {error, code}
+    const raw = errorBody.detail;
+    const message =
+      typeof raw === "string"
+        ? raw
+        : raw && typeof raw === "object"
+        ? (raw as Record<string, string>).error ?? JSON.stringify(raw)
+        : (response.statusText ?? "Request failed");
+
     throw new ApiError(
       response.status,
-      errorBody.detail ?? response.statusText ?? "Request failed",
-      errorBody.request_id
+      message,
+      typeof errorBody.request_id === "string" ? errorBody.request_id : undefined
     );
   }
 
