@@ -66,10 +66,16 @@ export function ConnectionCard({
   })
 
   async function onConnect(values: ConnectValues) {
-    await apiPost("/api/v1/github/connect", values)
-    toast.success("Repository connected successfully")
-    queryClient.invalidateQueries({ queryKey: ["github-connection"] })
-    form.reset()
+    try {
+      await apiPost("/api/v1/github/connect", values)
+      toast.success("Repository connected successfully")
+      queryClient.invalidateQueries({ queryKey: ["github-connection"] })
+      form.reset()
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to connect repository"
+      toast.error(message)
+    }
   }
 
   async function handleDisconnect() {
