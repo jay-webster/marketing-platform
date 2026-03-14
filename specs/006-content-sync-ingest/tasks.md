@@ -129,11 +129,11 @@
 
 **Purpose**: Audit coverage, frontend error handling, integration validation.
 
-- [ ] T046 [P] Verify audit logging: confirm write_audit() is called in all new endpoints — github_sync_triggered (POST /sync), github_folder_added (POST /config/folders), github_folder_removed (DELETE /config/folders/{name}), ingestion_pr_merged (PR merge), ingestion_pr_closed (PR close); check no write_audit calls use non-user UUIDs as target_id in src/api/sync.py, src/api/github.py, src/api/ingestion.py
-- [ ] T047 [P] Add SYNC_INTERVAL_HOURS and GITHUB_MERGE_METHOD to src/config.py Settings class with defaults ("24" and "merge" respectively) and update CLAUDE.md env vars table in src/config.py
+- [X] T046 [P] Verify audit logging: confirm write_audit() is called in all new endpoints — github_sync_triggered (POST /sync), github_folder_added (POST /config/folders), github_folder_removed (DELETE /config/folders/{name}), ingestion_pr_merged (PR merge), ingestion_pr_closed (PR close); check no write_audit calls use non-user UUIDs as target_id in src/api/sync.py, src/api/github.py, src/api/ingestion.py
+- [X] T047 [P] Add SYNC_INTERVAL_HOURS and GITHUB_MERGE_METHOD to src/config.py Settings class with defaults ("24" and "merge" respectively) and update CLAUDE.md env vars table in src/config.py
 - [ ] T048 Run quickstart.md US1 sync scenario: connect repo, trigger sync, verify content appears in GET /content; confirm idempotent re-sync produces files_unchanged count and no duplicates
 - [ ] T049 Run quickstart.md US2 PR workflow: upload file as non-admin, approve with folder, verify PR created, review in-app, merge, verify sync triggered and file appears in content browser
-- [ ] T050 Frontend: add error.tsx boundary for frontend/app/(dashboard)/ingestion/pr/[docId]/ route to handle 404/403 gracefully in frontend/app/(dashboard)/ingestion/pr/[docId]/error.tsx
+- [X] T050 Frontend: add error.tsx boundary for frontend/app/(dashboard)/ingestion/pr/[docId]/ route to handle 404/403 gracefully in frontend/app/(dashboard)/ingestion/pr/[docId]/error.tsx
 
 ---
 

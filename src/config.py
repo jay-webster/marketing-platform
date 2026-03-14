@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     KB_INDEX_CONCURRENCY: int = 2
 
     # Content Sync — Epic 6
-    SYNC_SCHEDULE_MINUTES: int = 60
+    SYNC_INTERVAL_HOURS: int = 24
     GITHUB_MERGE_METHOD: str = "merge"
 
     # SMTP

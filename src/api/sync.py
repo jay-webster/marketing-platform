@@ -21,6 +21,7 @@ from src.models.github_connection import GitHubConnection
 from src.models.sync_run import SyncOutcome, SyncRun, SyncTriggerType
 from src.models.synced_document import SyncedDocument
 from src.models.user import Role, User
+from utils.audit import write_audit
 from utils.auth import get_current_user, require_role
 from utils.db import get_db
 from utils.github_api import GitHubUnavailableError, GitHubValidationError
@@ -97,6 +98,14 @@ async def trigger_sync(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "SYNC_IN_PROGRESS", "message": "A sync is already in progress."},
         )
+
+    await write_audit(
+        db,
+        action="github_sync_triggered",
+        actor_id=current_user.id,
+        metadata={"connection_id": str(connection.id)},
+    )
+    await db.commit()
 
     background_tasks.add_task(
         _run_sync_background,

@@ -179,9 +179,10 @@ async def process_document(doc_id: uuid.UUID) -> None:
                 doc.processing_completed_at = now
                 doc.failure_reason = None
 
-                await write_audit(db, "ingestion_pr_created", target_id=doc_id,
-                                  metadata={"batch_id": str(doc.batch_id), "filename": doc.original_filename,
-                                            "pr_number": pr_number, "branch": branch_name})
+                await write_audit(db, "ingestion_pr_created",
+                                  metadata={"doc_id": str(doc_id), "batch_id": str(doc.batch_id),
+                                            "filename": doc.original_filename, "pr_number": pr_number,
+                                            "branch": branch_name})
                 await db.commit()
 
                 try:

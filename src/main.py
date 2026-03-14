@@ -95,7 +95,7 @@ async def _lifespan(application: FastAPI):
     # Start queue workers
     await start_queue_workers(concurrency=settings.WORKER_CONCURRENCY)
     await start_indexing_workers(concurrency=settings.KB_INDEX_CONCURRENCY)
-    await start_sync_scheduler(interval_minutes=settings.SYNC_SCHEDULE_MINUTES)
+    await start_sync_scheduler(interval_minutes=settings.SYNC_INTERVAL_HOURS * 60)
 
     yield
 

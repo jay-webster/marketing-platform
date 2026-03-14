@@ -829,8 +829,8 @@ async def merge_pr_endpoint(
         batch.completed_count += 1
         _recompute_batch_status(batch)
 
-    await write_audit(db, "ingestion_pr_merged", actor_id=current_user.id, target_id=doc_id,
-                      metadata={"batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number, "merged_to_folder": final_folder})
+    await write_audit(db, "ingestion_pr_merged", actor_id=current_user.id,
+                      metadata={"doc_id": str(doc_id), "batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number, "merged_to_folder": final_folder})
     await db.commit()
 
     # Trigger re-sync (fire-and-forget)
@@ -907,8 +907,8 @@ async def close_pr_endpoint(
         batch.failed_count += 1
         _recompute_batch_status(batch)
 
-    await write_audit(db, "ingestion_pr_closed", actor_id=current_user.id, target_id=doc_id,
-                      metadata={"batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number})
+    await write_audit(db, "ingestion_pr_closed", actor_id=current_user.id,
+                      metadata={"doc_id": str(doc_id), "batch_id": str(doc.batch_id), "pr_number": doc.github_pr_number})
     await db.commit()
 
     # Notify submitter (best-effort)

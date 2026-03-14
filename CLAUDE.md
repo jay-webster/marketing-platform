@@ -122,6 +122,8 @@ Before outputting any code, verify:
 | `CHAT_MODEL` | Claude model for chat generation (default claude-opus-4-6) (Epic 4) |
 | `CHAT_MAX_TOKENS` | Max tokens per chat response (default 1024) (Epic 4) |
 | `KB_INDEX_CONCURRENCY` | Indexing worker count (default 2) (Epic 4) |
+| `SYNC_INTERVAL_HOURS` | Scheduled sync interval in hours (default 24) (Epic 6) |
+| `GITHUB_MERGE_METHOD` | GitHub PR merge strategy: merge/squash/rebase (default merge) (Epic 6) |
 | `APP_URL` | Public base URL |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` | Email delivery |
 
