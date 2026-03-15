@@ -310,6 +310,12 @@ async def test_send_message_basic_rag(
     chunks = [e["data"]["text"] for e in events if e["event"] == "chunk"]
     assert "".join(chunks) == "Hello world."
 
+    # done event must carry message_id, session_id, and source_documents (T-001)
+    done_event = next(e for e in events if e["event"] == "done")
+    assert "message_id" in done_event["data"]
+    assert done_event["data"]["session_id"] == str(s.id)
+    assert isinstance(done_event["data"]["source_documents"], list)
+
 
 @_async
 async def test_send_message_empty_raises(
@@ -326,6 +332,24 @@ async def test_send_message_empty_raises(
             json={"message": "   "},
         )
     assert response.status_code == 422
+
+
+@_async
+async def test_send_message_too_long_raises(
+    async_client: AsyncClient,
+    marketer_token: str,
+    marketer_user,
+    db_session: AsyncSession,
+):
+    s = await _create_session(db_session, marketer_user.id)
+    with _patch_workers():
+        response = await async_client.post(
+            f"/api/v1/chat/sessions/{s.id}/messages",
+            headers={"Authorization": f"Bearer {marketer_token}"},
+            json={"message": "x" * 4001},
+        )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "MESSAGE_TOO_LONG"
 
 
 # ---------------------------------------------------------------------------
@@ -492,12 +516,13 @@ async def test_send_message_with_document_title_filter(
 # ---------------------------------------------------------------------------
 
 @_async
-async def test_send_message_sources_in_stream(
+async def test_send_message_sources_in_done_event(
     async_client: AsyncClient,
     marketer_token: str,
     marketer_user,
     db_session: AsyncSession,
 ):
+    """Sources are embedded in the done event payload, not a separate event."""
     s = await _create_session(db_session, marketer_user.id)
 
     with _patch_workers(), _patch_embed(), _patch_rag():
@@ -508,7 +533,98 @@ async def test_send_message_sources_in_stream(
         )
 
     events = _parse_sse(response.text)
-    source_events = [e for e in events if e["event"] == "sources"]
-    assert len(source_events) == 1
-    assert "documents" in source_events[0]["data"]
-    assert source_events[0]["data"]["documents"][0]["title"] == "Test Doc"
+    done_event = next(e for e in events if e["event"] == "done")
+    source_docs = done_event["data"]["source_documents"]
+    assert len(source_docs) == 1
+    assert source_docs[0]["title"] == "Test Doc"
+
+
+# ---------------------------------------------------------------------------
+# Auth isolation (T-005)
+# ---------------------------------------------------------------------------
+
+@_async
+async def test_send_message_wrong_user_denied(
+    async_client: AsyncClient,
+    marketer_token: str,
+    marketing_manager_user,
+    db_session: AsyncSession,
+):
+    """User B cannot send to a session owned by User A."""
+    s = await _create_session(db_session, marketing_manager_user.id)
+    with _patch_workers():
+        response = await async_client.post(
+            f"/api/v1/chat/sessions/{s.id}/messages",
+            headers={"Authorization": f"Bearer {marketer_token}"},
+            json={"message": "Sneaky message"},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Session auto-title (T-006)
+# ---------------------------------------------------------------------------
+
+@_async
+async def test_session_auto_title_set_from_first_message(
+    async_client: AsyncClient,
+    marketer_token: str,
+    marketer_user,
+    db_session: AsyncSession,
+):
+    """Session without a title gets titled from the first 60 chars of first user message."""
+    s = await _create_session(db_session, marketer_user.id, title=None)
+    assert s.title is None
+
+    with _patch_workers(), _patch_embed(), _patch_rag():
+        await async_client.post(
+            f"/api/v1/chat/sessions/{s.id}/messages",
+            headers={"Authorization": f"Bearer {marketer_token}"},
+            json={"message": "Hello, what is the Q3 report?"},
+        )
+
+    await db_session.refresh(s)
+    assert s.title == "Hello, what is the Q3 report?"
+
+
+@_async
+async def test_session_auto_title_truncated_to_60(
+    async_client: AsyncClient,
+    marketer_token: str,
+    marketer_user,
+    db_session: AsyncSession,
+):
+    """Auto-title is capped at 60 characters."""
+    s = await _create_session(db_session, marketer_user.id, title=None)
+    long_message = "A" * 100
+
+    with _patch_workers(), _patch_embed(), _patch_rag():
+        await async_client.post(
+            f"/api/v1/chat/sessions/{s.id}/messages",
+            headers={"Authorization": f"Bearer {marketer_token}"},
+            json={"message": long_message},
+        )
+
+    await db_session.refresh(s)
+    assert s.title == "A" * 60
+
+
+@_async
+async def test_session_existing_title_not_overwritten(
+    async_client: AsyncClient,
+    marketer_token: str,
+    marketer_user,
+    db_session: AsyncSession,
+):
+    """A session that already has a title keeps it after the first message."""
+    s = await _create_session(db_session, marketer_user.id, title="My Custom Title")
+
+    with _patch_workers(), _patch_embed(), _patch_rag():
+        await async_client.post(
+            f"/api/v1/chat/sessions/{s.id}/messages",
+            headers={"Authorization": f"Bearer {marketer_token}"},
+            json={"message": "This should not overwrite the title"},
+        )
+
+    await db_session.refresh(s)
+    assert s.title == "My Custom Title"

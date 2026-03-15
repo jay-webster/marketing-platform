@@ -173,6 +173,7 @@ async def rag_stream_generator(
             "id": c["id"],
             "title": c["metadata"].get("title", "Unknown"),
             "source_file": c["metadata"].get("source_file", ""),
+            "similarity": round(c["similarity"], 4),
         }
         for c in chunks
     ]

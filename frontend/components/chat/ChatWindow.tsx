@@ -96,20 +96,27 @@ export function ChatWindow({
       {/* Input area */}
       <div className="border-t p-4">
         <div className="flex gap-2 items-end">
-          <textarea
-            ref={textareaRef}
-            className="flex-1 min-h-[40px] max-h-[200px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed"
-            placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            disabled={isStreaming}
-          />
+          <div className="flex-1 relative">
+            <textarea
+              ref={textareaRef}
+              className="w-full min-h-[40px] max-h-[200px] resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed"
+              placeholder="Type a message… (Enter to send, Shift+Enter for new line)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              disabled={isStreaming}
+            />
+            {input.length > 3800 && (
+              <p className={`text-xs mt-1 text-right ${input.length > 4000 ? "text-destructive" : "text-muted-foreground"}`}>
+                {input.length}/4000
+              </p>
+            )}
+          </div>
           <Button
             size="icon"
             onClick={handleSubmit}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || !input.trim() || input.length > 4000}
           >
             <Send className="h-4 w-4" />
           </Button>
