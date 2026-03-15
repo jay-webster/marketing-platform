@@ -170,6 +170,11 @@ async def send_message(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"error": "Message cannot be empty", "code": "EMPTY_MESSAGE"},
         )
+    if len(body.message) > 4000:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": "Message exceeds 4000 character limit", "code": "MESSAGE_TOO_LONG"},
+        )
 
     session = await _get_owned_session(session_id, current_user.id, db)
 
@@ -191,6 +196,8 @@ async def send_message(
     )
     db.add(user_msg)
     session.last_active_at = datetime.now(timezone.utc)
+    if session.title is None:
+        session.title = body.message.strip()[:60]
     await db.commit()
 
     return StreamingResponse(
@@ -234,7 +241,11 @@ async def _sse_stream(db, session, user_message, history, document_title):
                 session.last_active_at = datetime.now(timezone.utc)
                 await db.commit()
                 yield _sse_event("no_content", {"message": no_content_msg})
-                yield _sse_event("done", {})
+                yield _sse_event("done", {
+                    "message_id": str(assistant_msg.id),
+                    "session_id": str(session.id),
+                    "source_documents": [],
+                })
                 return
 
             elif event_type == "chunk":
@@ -259,9 +270,11 @@ async def _sse_stream(db, session, user_message, history, document_title):
                 db.add(assistant_msg)
                 session.last_active_at = datetime.now(timezone.utc)
                 await db.commit()
-                if source_documents:
-                    yield _sse_event("sources", {"documents": source_documents})
-                yield _sse_event("done", {})
+                yield _sse_event("done", {
+                    "message_id": str(assistant_msg.id),
+                    "session_id": str(session.id),
+                    "source_documents": source_documents or [],
+                })
 
     except Exception as exc:
         yield _sse_event("error", {"message": "An error occurred processing your request."})

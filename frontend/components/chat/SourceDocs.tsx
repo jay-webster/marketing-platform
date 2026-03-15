@@ -39,8 +39,8 @@ export function SourceDocs({ docs }: { docs: SourceDoc[] }) {
                   {(doc.similarity * 100).toFixed(0)}% match
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {doc.chunk_text}
+              <p className="text-xs text-muted-foreground line-clamp-2 font-mono">
+                {doc.source_file}
               </p>
             </div>
           ))}

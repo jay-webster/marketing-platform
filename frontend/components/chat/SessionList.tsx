@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Plus, MessageSquare } from "lucide-react"
+import { Plus, MessageSquare, Trash2 } from "lucide-react"
 
-import { apiGet, apiPost } from "@/lib/api"
+import { apiGet, apiPost, apiDelete } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -32,6 +32,16 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
     router.push(`/chat/${session.id}`)
   }
 
+  async function handleDelete(e: React.MouseEvent, sessionId: string) {
+    e.stopPropagation()
+    if (!window.confirm("Delete this conversation?")) return
+    await apiDelete(`/api/v1/chat/sessions/${sessionId}`)
+    queryClient.invalidateQueries({ queryKey: ["chat-sessions"] })
+    if (activeSessionId === sessionId) {
+      router.push("/chat")
+    }
+  }
+
   return (
     <aside className="flex w-64 flex-col border-r bg-background shrink-0">
       <div className="p-3 border-b">
@@ -54,17 +64,17 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
           ))}
 
         {data?.map((session) => (
-          <button
+          <div
             key={session.id}
-            onClick={() => router.push(`/chat/${session.id}`)}
             className={cn(
-              "w-full text-left rounded-md px-3 py-2 text-sm transition-colors",
+              "group relative w-full text-left rounded-md px-3 py-2 text-sm transition-colors cursor-pointer",
               activeSessionId === session.id
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-muted"
             )}
+            onClick={() => router.push(`/chat/${session.id}`)}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pr-6">
               <MessageSquare className="h-3 w-3 shrink-0" />
               <span className="truncate font-medium">
                 {session.title ?? "New conversation"}
@@ -80,7 +90,19 @@ export function SessionList({ activeSessionId }: { activeSessionId?: string }) {
             >
               {formatDate(session.last_active_at)}
             </p>
-          </button>
+            <button
+              onClick={(e) => handleDelete(e, session.id)}
+              className={cn(
+                "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity",
+                activeSessionId === session.id
+                  ? "hover:bg-primary-foreground/20 text-primary-foreground"
+                  : "hover:bg-muted-foreground/20 text-muted-foreground"
+              )}
+              aria-label="Delete conversation"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
         ))}
 
         {!isLoading && data?.length === 0 && (

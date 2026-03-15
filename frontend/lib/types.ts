@@ -94,7 +94,7 @@ export interface ChatMessage {
 
 export interface SourceDoc {
   title: string;
-  chunk_text: string;
+  source_file: string;
   similarity: number;
 }
 

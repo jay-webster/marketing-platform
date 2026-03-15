@@ -3,11 +3,6 @@
 import { useState, useCallback } from "react"
 import type { ChatMessage, SourceDoc, SSEChunkEvent, SSEDoneEvent } from "@/lib/types"
 
-const API_URL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-    : (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-
 export function useChat(initialMessages: ChatMessage[] = []) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
@@ -35,12 +30,11 @@ export function useChat(initialMessages: ChatMessage[] = []) {
 
       try {
         const response = await fetch(
-          `${API_URL}/api/v1/chat/sessions/${sessionId}/messages`,
+          `/api/v1/chat/sessions/${sessionId}/messages`,
           {
             method: "POST",
-            credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: text }),
+            body: JSON.stringify({ message: text }),
           }
         )
 
@@ -75,7 +69,20 @@ export function useChat(initialMessages: ChatMessage[] = []) {
                 try {
                   const payload = JSON.parse(dataLine)
 
-                  if (eventType === "chunk") {
+                  if (eventType === "no_content") {
+                    const noContentMsg: ChatMessage = {
+                      id: crypto.randomUUID(),
+                      session_id: sessionId,
+                      role: "assistant",
+                      content: payload.message as string,
+                      is_generated_content: false,
+                      source_documents: null,
+                      created_at: new Date().toISOString(),
+                    }
+                    setMessages((prev) => [...prev, noContentMsg])
+                    setStreamingText("")
+                    setIsStreaming(false)
+                  } else if (eventType === "chunk") {
                     const chunk = payload as SSEChunkEvent
                     accumulatedText += chunk.text
                     isGenerated = chunk.is_generated_content

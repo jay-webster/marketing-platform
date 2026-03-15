@@ -22,7 +22,7 @@ export default async function ChatSessionPage({
 
   if (token) {
     const res = await fetch(
-      `${API_URL}/api/v1/chat/sessions/${sessionId}/messages`,
+      `${API_URL}/api/v1/chat/sessions/${sessionId}`,
       {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
@@ -33,7 +33,7 @@ export default async function ChatSessionPage({
     }
     if (res.ok) {
       const data = await res.json()
-      initialMessages = data.data ?? []
+      initialMessages = data.data?.messages ?? []
     }
   }
 
