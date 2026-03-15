@@ -48,6 +48,11 @@ export function useChat(initialMessages: ChatMessage[] = []) {
         let accumulatedText = ""
         let isGenerated = false
 
+        // Declared outside the read loop so partial events are preserved
+        // across TCP chunk boundaries
+        let eventType = ""
+        let dataLine = ""
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -56,9 +61,6 @@ export function useChat(initialMessages: ChatMessage[] = []) {
           const lines = buffer.split("\n")
           buffer = lines.pop() ?? ""
 
-          let eventType = ""
-          let dataLine = ""
-
           for (const line of lines) {
             if (line.startsWith("event: ")) {
               eventType = line.slice(7).trim()
@@ -66,47 +68,51 @@ export function useChat(initialMessages: ChatMessage[] = []) {
               dataLine = line.slice(6).trim()
             } else if (line === "") {
               if (eventType && dataLine) {
+                let payload: Record<string, unknown>
                 try {
-                  const payload = JSON.parse(dataLine)
-
-                  if (eventType === "no_content") {
-                    const noContentMsg: ChatMessage = {
-                      id: crypto.randomUUID(),
-                      session_id: sessionId,
-                      role: "assistant",
-                      content: payload.message as string,
-                      is_generated_content: false,
-                      source_documents: null,
-                      created_at: new Date().toISOString(),
-                    }
-                    setMessages((prev) => [...prev, noContentMsg])
-                    setStreamingText("")
-                    setIsStreaming(false)
-                  } else if (eventType === "chunk") {
-                    const chunk = payload as SSEChunkEvent
-                    accumulatedText += chunk.text
-                    isGenerated = chunk.is_generated_content
-                    setStreamingText(accumulatedText)
-                  } else if (eventType === "done") {
-                    const doneEvent = payload as SSEDoneEvent
-                    const assistantMsg: ChatMessage = {
-                      id: doneEvent.message_id,
-                      session_id: doneEvent.session_id,
-                      role: "assistant",
-                      content: accumulatedText,
-                      is_generated_content: isGenerated,
-                      source_documents: doneEvent.source_documents,
-                      created_at: new Date().toISOString(),
-                    }
-                    setMessages((prev) => [...prev, assistantMsg])
-                    setSourceDocs(doneEvent.source_documents)
-                    setStreamingText("")
-                    setIsStreaming(false)
-                  } else if (eventType === "error") {
-                    throw new Error(payload.detail ?? "Stream error")
-                  }
+                  payload = JSON.parse(dataLine)
                 } catch {
                   // Malformed SSE frame — skip
+                  eventType = ""
+                  dataLine = ""
+                  continue
+                }
+
+                if (eventType === "no_content") {
+                  const noContentMsg: ChatMessage = {
+                    id: crypto.randomUUID(),
+                    session_id: sessionId,
+                    role: "assistant",
+                    content: payload.message as string,
+                    is_generated_content: false,
+                    source_documents: null,
+                    created_at: new Date().toISOString(),
+                  }
+                  setMessages((prev) => [...prev, noContentMsg])
+                  setStreamingText("")
+                  setIsStreaming(false)
+                } else if (eventType === "chunk") {
+                  const chunk = payload as unknown as SSEChunkEvent
+                  accumulatedText += chunk.text
+                  isGenerated = chunk.is_generated_content
+                  setStreamingText(accumulatedText)
+                } else if (eventType === "done") {
+                  const doneEvent = payload as unknown as SSEDoneEvent
+                  const assistantMsg: ChatMessage = {
+                    id: doneEvent.message_id,
+                    session_id: doneEvent.session_id,
+                    role: "assistant",
+                    content: accumulatedText,
+                    is_generated_content: isGenerated,
+                    source_documents: doneEvent.source_documents,
+                    created_at: new Date().toISOString(),
+                  }
+                  setMessages((prev) => [...prev, assistantMsg])
+                  setSourceDocs(doneEvent.source_documents)
+                  setStreamingText("")
+                  setIsStreaming(false)
+                } else if (eventType === "error") {
+                  throw new Error((payload.message as string) ?? "Stream error")
                 }
               }
               eventType = ""
@@ -114,6 +120,9 @@ export function useChat(initialMessages: ChatMessage[] = []) {
             }
           }
         }
+
+        // Guard: ensure streaming state is cleared if stream ends without done event
+        setIsStreaming(false)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to send message")
         setIsStreaming(false)
