@@ -90,14 +90,14 @@ async def retrieve_chunks(
             cc.id,
             cc.content_text,
             cc.metadata,
-            1 - (cc.embedding <=> :embedding::vector) AS similarity
+            1 - (cc.embedding <=> CAST(:embedding AS vector)) AS similarity
         FROM content_chunks cc
         JOIN knowledge_base_documents kbd ON kbd.id = cc.knowledge_base_document_id
         JOIN processed_documents pd ON pd.id = kbd.processed_document_id
         WHERE kbd.index_status = 'indexed'
-          AND 1 - (cc.embedding <=> :embedding::vector) >= :threshold
+          AND 1 - (cc.embedding <=> CAST(:embedding AS vector)) >= :threshold
           {title_filter}
-        ORDER BY cc.embedding <=> :embedding::vector
+        ORDER BY cc.embedding <=> CAST(:embedding AS vector)
         LIMIT :top_k
         """
     )
