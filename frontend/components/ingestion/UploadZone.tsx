@@ -21,9 +21,8 @@ const ACCEPTED_TYPES = new Set([
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 // Files larger than this go directly to the backend (bypassing Vercel's 4.5MB BFF limit)
 const BFF_SIZE_LIMIT = 4 * 1024 * 1024 // 4 MB
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
-interface UploadTokenResponse { token: string; expires_in: number }
+interface UploadTokenResponse { token: string; upload_url: string; expires_in: number }
 
 export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
   const isAdmin = userRole === "admin"
@@ -66,7 +65,7 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
 
       if (file.size > BFF_SIZE_LIMIT) {
         const tokenData = await apiGet<UploadTokenResponse>("/api/v1/ingestion/upload-token")
-        uploadUrl = `${BACKEND_URL}/api/v1/ingestion/batches`
+        uploadUrl = tokenData.upload_url
         extraHeaders["Authorization"] = `Bearer ${tokenData.token}`
       }
 

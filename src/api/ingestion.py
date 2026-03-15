@@ -78,9 +78,12 @@ async def get_upload_token(
         algorithm="HS256",
     )
 
+    upload_url = f"{_settings.APP_URL.rstrip('/')}/api/v1/ingestion/batches"
+
     return {
         "data": {
             "token": short_token,
+            "upload_url": upload_url,
             "expires_in": _UPLOAD_TOKEN_EXPIRE_MINUTES * 60,
         },
         "request_id": _request_id(request),
