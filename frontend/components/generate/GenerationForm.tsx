@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { ImagePicker } from "./ImagePicker"
+import { apiPost } from "@/lib/api"
 import type { GenerationRequest, OutputType, PDFTemplate } from "@/lib/types"
 
 const OUTPUT_TYPES: { value: OutputType; label: string }[] = [
@@ -53,22 +54,7 @@ export function GenerationForm({
         if (selectedImageIds.length > 0) body.image_ids = selectedImageIds
       }
 
-      const res = await fetch("/api/v1/generate/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.detail?.error ?? `Request failed (${res.status})`)
-      }
-
-      const json = await res.json()
-      const data: GenerationRequest = {
-        ...json.data,
-        result: json.data.result,
-      }
+      const data = await apiPost<GenerationRequest>("/api/v1/generate/", body)
 
       if (data.status === "failed" && data.failure_reason === "no_kb_content") {
         setError(

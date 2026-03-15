@@ -4,6 +4,7 @@ import { useState } from "react"
 import { GenerationForm } from "@/components/generate/GenerationForm"
 import { GenerationResult } from "@/components/generate/GenerationResult"
 import { GenerationHistory } from "@/components/generate/GenerationHistory"
+import { apiPost } from "@/lib/api"
 import type { GenerationRequest, OutputType } from "@/lib/types"
 
 type Tab = "generate" | "history"
@@ -28,17 +29,14 @@ export default function GeneratePage() {
 
   async function handleRegenerate() {
     if (!currentResult) return
-    const res = await fetch("/api/v1/generate/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const data = await apiPost<GenerationRequest>("/api/v1/generate/", {
         output_type: currentResult.output_type,
         prompt: currentResult.prompt,
-      }),
-    })
-    if (res.ok) {
-      const json = await res.json()
-      setCurrentResult({ ...json.data, result: json.data.result })
+      })
+      setCurrentResult(data)
+    } catch {
+      // errors surface in the GenerationResult component
     }
   }
 

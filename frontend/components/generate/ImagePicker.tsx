@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { apiGet } from "@/lib/api"
 import type { BrandImage } from "@/lib/types"
 
 interface ImagePickerProps {
@@ -14,19 +15,10 @@ export function ImagePicker({ selectedIds, onSelectionChange }: ImagePickerProps
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    async function fetchImages() {
-      try {
-        const res = await fetch("/api/v1/images/?limit=200")
-        if (!res.ok) throw new Error(`Failed to load images (${res.status})`)
-        const json = await res.json()
-        setImages(json.data)
-      } catch (err) {
-        setError("Could not load brand images.")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchImages()
+    apiGet<BrandImage[]>("/api/v1/images/?limit=200")
+      .then((data) => setImages(data))
+      .catch(() => setError("Could not load brand images."))
+      .finally(() => setIsLoading(false))
   }, [])
 
   function toggleImage(id: string) {
