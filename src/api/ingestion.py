@@ -169,6 +169,7 @@ async def submit_batch(
     request: Request,
     folder_name: str = Form(...),
     files: list[UploadFile] = File(...),
+    destination_folder: Optional[str] = Form(None),
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -248,6 +249,7 @@ async def submit_batch(
             file_size_bytes=f.size or 0,
             gcs_object_path=gcs_path,
             processing_status=initial_status,
+            destination_folder=destination_folder if current_user.role == Role.ADMIN.value else None,
         )
         db.add(doc)
         documents.append(doc)

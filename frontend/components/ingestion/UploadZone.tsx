@@ -2,11 +2,18 @@
 
 import { useRef, useState } from "react"
 import { Upload, X } from "lucide-react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { apiGet } from "@/lib/api"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 const ACCEPTED = ".pdf,.docx,.pptx,.csv,.txt,.md"
@@ -19,18 +26,26 @@ const ACCEPTED_TYPES = new Set([
   "text/markdown",
 ])
 const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
-// Files larger than this go directly to the backend (bypassing Vercel's 4.5MB BFF limit)
 const BFF_SIZE_LIMIT = 4 * 1024 * 1024 // 4 MB
 
 interface UploadTokenResponse { token: string; upload_url: string; expires_in: number }
+interface GitHubConfig { folders: string[] }
 
 export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
   const isAdmin = userRole === "admin"
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [selectedFolder, setSelectedFolder] = useState<string>("")
   const inputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
+
+  const { data: configData } = useQuery({
+    queryKey: ["github-config"],
+    queryFn: () => apiGet<GitHubConfig>("/api/v1/github/config"),
+    enabled: isAdmin,
+  })
+  const folders = configData?.folders ?? []
 
   function validateFile(file: File): string | null {
     if (!ACCEPTED_TYPES.has(file.type) && !ACCEPTED.split(",").some((ext) => file.name.endsWith(ext))) {
@@ -38,6 +53,9 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
     }
     if (file.size > MAX_BYTES) {
       return `File too large (max 50 MB): ${file.name}`
+    }
+    if (isAdmin && !selectedFolder) {
+      return "Please select a destination folder before uploading"
     }
     return null
   }
@@ -54,12 +72,12 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
 
     const form = new FormData()
     form.append("files", file)
-    // source_folder_name is a display label for the batch; use the filename stem
     form.append("folder_name", file.name.replace(/\.[^.]+$/, ""))
+    if (isAdmin && selectedFolder) {
+      form.append("destination_folder", selectedFolder)
+    }
 
     try {
-      // Files > 4MB bypass the Vercel BFF (which has a 4.5MB payload limit)
-      // by fetching a short-lived upload token and POSTing directly to the backend.
       let uploadUrl = `/api/v1/ingestion/batches`
       const extraHeaders: Record<string, string> = {}
 
@@ -87,6 +105,7 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
       }
       queryClient.invalidateQueries({ queryKey: ["ingestion-batches"] })
       queryClient.invalidateQueries({ queryKey: ["pending-approvals"] })
+      queryClient.invalidateQueries({ queryKey: ["pr-list"] })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed")
     } finally {
@@ -108,12 +127,32 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
   }
 
   return (
-    <div>
+    <div className="space-y-3">
+      {isAdmin && (
+        <div className="flex items-center gap-3">
+          <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+            <SelectTrigger className="w-[280px]">
+              <SelectValue placeholder="Select destination folder…" />
+            </SelectTrigger>
+            <SelectContent>
+              {folders.map((f) => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {folders.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              No folders configured — add folders in GitHub settings first.
+            </p>
+          )}
+        </div>
+      )}
+
       <div
         className={cn(
           "relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-10 transition-colors",
           isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-muted-foreground/50",
-          isUploading && "opacity-60 pointer-events-none"
+          (isUploading || (isAdmin && !selectedFolder)) && "opacity-60 pointer-events-none"
         )}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
         onDragLeave={() => setIsDragging(false)}
@@ -130,7 +169,7 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
         <Button
           variant="outline"
           size="sm"
-          disabled={isUploading}
+          disabled={isUploading || (isAdmin && !selectedFolder)}
           onClick={() => inputRef.current?.click()}
         >
           {isAdmin ? "Browse files" : "Submit for review"}
@@ -144,7 +183,7 @@ export function UploadZone({ userRole = "marketer" }: { userRole?: string }) {
         />
       </div>
       {uploadError && (
-        <div className="flex items-center gap-2 mt-2 text-sm text-destructive">
+        <div className="flex items-center gap-2 text-sm text-destructive">
           <X className="h-4 w-4 shrink-0" />
           <span>{uploadError}</span>
         </div>
