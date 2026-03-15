@@ -54,7 +54,7 @@ export function AdminDashboard() {
   const { data: kbStatus, isLoading: contentLoading } = useQuery({
     queryKey: ["kb-status"],
     queryFn: () =>
-      apiGet<{ total: number; by_status: Record<string, number> }>("/api/v1/knowledge-base/status"),
+      apiGet<{ total: number; by_status: Record<string, number> }>("/api/v1/admin/knowledge-base/status"),
   })
 
   const { data: jobs, isLoading: jobsLoading } = useQuery({

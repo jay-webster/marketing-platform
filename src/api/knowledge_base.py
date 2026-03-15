@@ -1,28 +1,14 @@
 """Admin Knowledge Base management endpoints."""
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings
 from src.models.knowledge_base_document import KBIndexStatus, KnowledgeBaseDocument
-from src.models.processed_document import ProcessedDocument, ReviewStatus
-from utils.auth import get_current_user
+from src.models.user import Role
+from utils.auth import require_role
 from utils.db import get_db
 
 router = APIRouter(prefix="/admin/knowledge-base", tags=["knowledge-base"])
-
-_ADMIN_TOKEN_HEADER = "X-Admin-Token"
-
-
-def _verify_admin(request: Request) -> None:
-    token = request.headers.get(_ADMIN_TOKEN_HEADER)
-    if not token or token != settings.ADMIN_TOKEN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"error": "Invalid or missing admin token", "code": "FORBIDDEN"},
-        )
 
 
 def _request_id(request: Request) -> str:
@@ -36,10 +22,9 @@ def _request_id(request: Request) -> str:
 @router.get("/status")
 async def kb_status(
     request: Request,
-    current_user=Depends(get_current_user),
+    current_user=require_role(Role.ADMIN),
     db: AsyncSession = Depends(get_db),
 ):
-    _verify_admin(request)
 
     result = await db.execute(select(KnowledgeBaseDocument))
     kb_docs = result.scalars().all()
@@ -64,10 +49,9 @@ async def kb_status(
 @router.post("/reindex")
 async def reindex_failed(
     request: Request,
-    current_user=Depends(get_current_user),
+    current_user=require_role(Role.ADMIN),
     db: AsyncSession = Depends(get_db),
 ):
-    _verify_admin(request)
 
     # Find all approved ProcessedDocuments without an indexed KB doc
     result = await db.execute(

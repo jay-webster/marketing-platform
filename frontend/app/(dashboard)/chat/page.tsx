@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getUser } from "@/lib/dal"
 import { cookies } from "next/headers"
+import { SessionList } from "@/components/chat/SessionList"
 import { EmptyState } from "@/components/layout/EmptyState"
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
@@ -28,13 +29,14 @@ export default async function ChatIndexPage() {
     }
   }
 
-  // No sessions yet — show empty state
+  // No sessions yet — show sidebar + empty state so user can start one
   return (
-    <div className="flex h-full">
+    <div className="flex h-full overflow-hidden">
+      <SessionList />
       <div className="flex-1 flex items-center justify-center">
         <EmptyState
           title="No conversations yet"
-          description="Start your first conversation to explore your knowledge base."
+          description="Click 'New Chat' to start your first conversation."
         />
       </div>
     </div>
