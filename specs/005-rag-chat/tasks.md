@@ -16,7 +16,7 @@
 
 **Purpose**: No new scaffolding required — codebase already has all models, utilities, routes, and UI components. This phase confirms readiness and resolves the naming conflict.
 
-- [ ] T001 Rename `specs/005-nextjs-frontend` to `specs/004-nextjs-frontend` (or next available prefix) to resolve the duplicate-005 prefix warning from setup scripts
+- [x] T001 Rename `specs/005-nextjs-frontend` to `specs/004-nextjs-frontend` (or next available prefix) to resolve the duplicate-005 prefix warning from setup scripts
 
 ---
 
@@ -26,10 +26,10 @@
 
 **⚠️ CRITICAL**: Both tasks must be complete before any user story testing can begin.
 
-- [ ] T002 Update `SourceDoc` interface in `frontend/lib/types.ts`: replace `chunk_text: string` with `source_file: string`; keep `title: string` and `similarity: number`
-- [ ] T003 Update `SSEDoneEvent` interface in `frontend/lib/types.ts` to match contract: `{ message_id: string; session_id: string; source_documents: SourceDoc[] }`
-- [ ] T004 Fix `useChat` BFF bypass in `frontend/hooks/useChat.ts`: change `fetch(\`${API_URL}/api/v1/chat/sessions/${sessionId}/messages\`, ...)` to `fetch(\`/api/v1/chat/sessions/${sessionId}/messages\`, ...)` and remove `credentials: "include"`
-- [ ] T005 Fix `useChat` request body in `frontend/hooks/useChat.ts`: change `body: JSON.stringify({ content: text })` to `body: JSON.stringify({ message: text })`
+- [x] T002 Update `SourceDoc` interface in `frontend/lib/types.ts`: replace `chunk_text: string` with `source_file: string`; keep `title: string` and `similarity: number`
+- [x] T003 Update `SSEDoneEvent` interface in `frontend/lib/types.ts` to match contract: `{ message_id: string; session_id: string; source_documents: SourceDoc[] }`
+- [x] T004 Fix `useChat` BFF bypass in `frontend/hooks/useChat.ts`: change `fetch(\`${API_URL}/api/v1/chat/sessions/${sessionId}/messages\`, ...)` to `fetch(\`/api/v1/chat/sessions/${sessionId}/messages\`, ...)` and remove `credentials: "include"`
+- [x] T005 Fix `useChat` request body in `frontend/hooks/useChat.ts`: change `body: JSON.stringify({ content: text })` to `body: JSON.stringify({ message: text })`
 
 **Checkpoint**: After T002–T005, the SSE fetch pipeline is correctly routed and typed. User story work can begin.
 
@@ -41,10 +41,10 @@
 
 **Independent Test**: With one document indexed, open `/chat`, create a new session, type a question about that document's content, press Enter. Verify text streams in progressively and source references appear when streaming completes.
 
-- [ ] T006 [P] [US1] Add `similarity` field to source_docs in `utils/rag.py` in `rag_stream_generator`: add `"similarity": round(c["similarity"], 4)` to each dict in the `source_docs` list
-- [ ] T007 [P] [US1] Update `_sse_stream` in `src/api/chat.py` to accumulate `source_documents` from the `sources` event yielded by `rag_stream_generator`, then embed them in the `done` event payload: `_sse_event("done", {"message_id": str(assistant_msg.id), "session_id": str(session.id), "source_documents": source_documents or []})`
-- [ ] T008 [US1] Remove the now-redundant standalone `yield _sse_event("sources", ...)` line from `_sse_stream` in `src/api/chat.py` (sources are now carried in the `done` payload per contracts/api.md)
-- [ ] T009 [US1] Update `useChat` in `frontend/hooks/useChat.ts` to correctly handle the updated `done` event: verify `doneEvent.source_documents` is applied to the assistant `ChatMessage`; ensure `isStreaming` is set to `false` after this event
+- [x] T006 [P] [US1] Add `similarity` field to source_docs in `utils/rag.py` in `rag_stream_generator`: add `"similarity": round(c["similarity"], 4)` to each dict in the `source_docs` list
+- [x] T007 [P] [US1] Update `_sse_stream` in `src/api/chat.py` to accumulate `source_documents` from the `sources` event yielded by `rag_stream_generator`, then embed them in the `done` event payload: `_sse_event("done", {"message_id": str(assistant_msg.id), "session_id": str(session.id), "source_documents": source_documents or []})`
+- [x] T008 [US1] Remove the now-redundant standalone `yield _sse_event("sources", ...)` line from `_sse_stream` in `src/api/chat.py` (sources are now carried in the `done` payload per contracts/api.md)
+- [x] T009 [US1] Update `useChat` in `frontend/hooks/useChat.ts` to correctly handle the updated `done` event: verify `doneEvent.source_documents` is applied to the assistant `ChatMessage`; ensure `isStreaming` is set to `false` after this event
 
 **Checkpoint**: User can send a message, watch it stream in, and see collapsed source references. Core value proposition works end-to-end.
 
@@ -56,7 +56,7 @@
 
 **Independent Test**: In an existing session with at least two prior turns, ask "can you elaborate on that?" — the response should reference the prior context. Reload the page and verify history is intact.
 
-- [ ] T010 [US2] Fix `chat/[sessionId]/page.tsx`: change the server-side fetch from the non-existent `/chat/sessions/${sessionId}/messages` to `/chat/sessions/${sessionId}`, and extract `data.data.messages ?? []` for `initialMessages`
+- [x] T010 [US2] Fix `chat/[sessionId]/page.tsx`: change the server-side fetch from the non-existent `/chat/sessions/${sessionId}/messages` to `/chat/sessions/${sessionId}`, and extract `data.data.messages ?? []` for `initialMessages`
 
 **Checkpoint**: Navigating to `/chat/{sessionId}` correctly loads prior history. Multi-turn context is already handled by the backend (last 20 messages passed to `rag_stream_generator`).
 
@@ -68,8 +68,8 @@
 
 **Independent Test**: Ask a question about a topic with no indexed documents (e.g., "what is the capital of France?"). Verify a clear "no information" message appears as an assistant bubble — not a blank screen, not a fabricated answer.
 
-- [ ] T011 [P] [US4] Update `_sse_stream` in `src/api/chat.py` to include `message_id` and `session_id` in the `done` event that follows `no_content`: change `yield _sse_event("done", {})` in the `no_content` branch to `yield _sse_event("done", {"message_id": str(assistant_msg.id), "session_id": str(session.id), "source_documents": []})`
-- [ ] T012 [US4] Add `no_content` SSE event handler to `useChat` in `frontend/hooks/useChat.ts`: on `eventType === "no_content"`, add an assistant `ChatMessage` to state with `content: payload.message`, set `isStreaming(false)`, and set `streamingText("")`
+- [x] T011 [P] [US4] Update `_sse_stream` in `src/api/chat.py` to include `message_id` and `session_id` in the `done` event that follows `no_content`: change `yield _sse_event("done", {})` in the `no_content` branch to `yield _sse_event("done", {"message_id": str(assistant_msg.id), "session_id": str(session.id), "source_documents": []})`
+- [x] T012 [US4] Add `no_content` SSE event handler to `useChat` in `frontend/hooks/useChat.ts`: on `eventType === "no_content"`, add an assistant `ChatMessage` to state with `content: payload.message`, set `isStreaming(false)`, and set `streamingText("")`
 
 **Checkpoint**: Unanswerable queries produce a visible, honest response message. Stream never hangs.
 
@@ -81,9 +81,9 @@
 
 **Independent Test**: Create two sessions with different first messages — verify each gets a distinct title in the sidebar. Delete one session; verify it disappears from the list and the other session is unaffected.
 
-- [ ] T013 [P] [US3] Add session auto-title logic to `send_message` in `src/api/chat.py`: after persisting `user_msg`, if `session.title is None`, set `session.title = body.message[:60].strip()` and include it in the `db.commit()`
-- [ ] T014 [P] [US3] Add `apiDelete` helper to `frontend/lib/api.ts` if not already present (check first): `export async function apiDelete(path: string)` that calls `apiFetch(path, { method: "DELETE" })`
-- [ ] T015 [US3] Add per-session delete button to `SessionList` in `frontend/components/chat/SessionList.tsx`: show a trash icon (lucide `Trash2`) on hover for each session item; on click, call `window.confirm("Delete this conversation?")`, then `apiDelete(\`/api/v1/chat/sessions/${session.id}\`)`, invalidate `["chat-sessions"]` query, and if `activeSessionId === session.id` redirect to `/chat`
+- [x] T013 [P] [US3] Add session auto-title logic to `send_message` in `src/api/chat.py`: after persisting `user_msg`, if `session.title is None`, set `session.title = body.message[:60].strip()` and include it in the `db.commit()`
+- [x] T014 [P] [US3] Add `apiDelete` helper to `frontend/lib/api.ts` if not already present (check first): `export async function apiDelete(path: string)` that calls `apiFetch(path, { method: "DELETE" })`
+- [x] T015 [US3] Add per-session delete button to `SessionList` in `frontend/components/chat/SessionList.tsx`: show a trash icon (lucide `Trash2`) on hover for each session item; on click, call `window.confirm("Delete this conversation?")`, then `apiDelete(\`/api/v1/chat/sessions/${session.id}\`)`, invalidate `["chat-sessions"]` query, and if `activeSessionId === session.id` redirect to `/chat`
 
 **Checkpoint**: Session sidebar shows auto-derived titles and a working delete control. Users can manage conversation history.
 
@@ -93,14 +93,14 @@
 
 **Purpose**: Message length enforcement (FR-011) and backend tests spanning all stories.
 
-- [ ] T016 [P] Add message length validation to `send_message` in `src/api/chat.py`: after the empty-message check, add `if len(body.message) > 4000: raise HTTPException(status_code=422, detail={"error": "Message exceeds 4000 character limit", "code": "MESSAGE_TOO_LONG"})`
-- [ ] T017 [P] Add client-side message length guard to `ChatWindow` in `frontend/components/chat/ChatWindow.tsx`: disable the send button when `input.length > 4000`; show a character counter `text-destructive` below the textarea when within 200 characters of the limit
-- [ ] T018 [P] Write backend test T-001 in `tests/api/test_chat.py`: happy-path send message — mock `embed_text` and `rag_stream_generator`; POST to `/chat/sessions/{id}/messages`; assert SSE stream includes `chunk` events and a `done` event with `message_id` and non-empty `source_documents`
-- [ ] T019 [P] Write backend test T-002 in `tests/api/test_chat.py`: no-content path — mock `rag_stream_generator` to yield `("no_content", {})`; assert SSE includes `no_content` event followed by `done` with `message_id`
-- [ ] T020 [P] Write backend test T-003 in `tests/api/test_chat.py`: empty message — POST `{"message": "   "}`; assert 422 response
-- [ ] T021 [P] Write backend test T-004 in `tests/api/test_chat.py`: message too long — POST message of 4001 characters; assert 422 response with code `MESSAGE_TOO_LONG`
-- [ ] T022 [P] Write backend test T-005 in `tests/api/test_chat.py`: auth isolation — create session as user A; attempt GET and POST as user B; assert 404 on both
-- [ ] T023 [P] Write backend test T-006 in `tests/api/test_chat.py`: session auto-title — create untitled session; send first message with text "Hello, what is the Q3 report?"; assert `session.title == "Hello, what is the Q3 report?"`
+- [x] T016 [P] Add message length validation to `send_message` in `src/api/chat.py`: after the empty-message check, add `if len(body.message) > 4000: raise HTTPException(status_code=422, detail={"error": "Message exceeds 4000 character limit", "code": "MESSAGE_TOO_LONG"})`
+- [x] T017 [P] Add client-side message length guard to `ChatWindow` in `frontend/components/chat/ChatWindow.tsx`: disable the send button when `input.length > 4000`; show a character counter `text-destructive` below the textarea when within 200 characters of the limit
+- [x] T018 [P] Write backend test T-001 in `tests/api/test_chat.py`: happy-path send message — mock `embed_text` and `rag_stream_generator`; POST to `/chat/sessions/{id}/messages`; assert SSE stream includes `chunk` events and a `done` event with `message_id` and non-empty `source_documents`
+- [x] T019 [P] Write backend test T-002 in `tests/api/test_chat.py`: no-content path — mock `rag_stream_generator` to yield `("no_content", {})`; assert SSE includes `no_content` event followed by `done` with `message_id`
+- [x] T020 [P] Write backend test T-003 in `tests/api/test_chat.py`: empty message — POST `{"message": "   "}`; assert 422 response
+- [x] T021 [P] Write backend test T-004 in `tests/api/test_chat.py`: message too long — POST message of 4001 characters; assert 422 response with code `MESSAGE_TOO_LONG`
+- [x] T022 [P] Write backend test T-005 in `tests/api/test_chat.py`: auth isolation — create session as user A; attempt GET and POST as user B; assert 404 on both
+- [x] T023 [P] Write backend test T-006 in `tests/api/test_chat.py`: session auto-title — create untitled session; send first message with text "Hello, what is the Q3 report?"; assert `session.title == "Hello, what is the Q3 report?"`
 
 ---
 
