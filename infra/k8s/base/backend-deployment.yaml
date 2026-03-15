@@ -120,6 +120,16 @@ spec:
                 secretKeyRef:
                   name: backend-secrets
                   key: gcs-bucket-name
+            # Content Generation (Epic 7)
+            - name: BRAND_IMAGES_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: brand-images-bucket
+            - name: PDF_SIGNED_URL_EXPIRY_SECONDS
+              value: "86400"
+            - name: GENERATION_MODEL
+              value: "claude-opus-4-6"
             # SMTP
             - name: SMTP_HOST
               valueFrom:

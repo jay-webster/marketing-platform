@@ -60,6 +60,8 @@ Every route that accesses application data MUST verify an authenticated session 
 | `utils/chunker.py` | Markdown section-primary chunker with frontmatter prepend (Epic 4) |
 | `utils/indexer.py` | KB indexing pipeline — chunk + embed + upsert to content_chunks (Epic 4) |
 | `utils/rag.py` | pgvector retrieval, prompt assembly, SSE stream generator (Epic 4) |
+| `utils/generator.py` | RAG-grounded structured content generation — email, LinkedIn, PDF body; `NoKBContentError` (Epic 7) |
+| `utils/pdf_renderer.py` | WeasyPrint HTML/Jinja2 → PDF bytes in-memory; fetches images from GCS as base64 data URIs (Epic 7) |
 
 Before writing any new utility, check if one exists here. If it partially covers the need, extend it.
 
@@ -130,6 +132,10 @@ Before outputting any code, verify:
 ## Active Technologies
 - Python 3.11 / FastAPI (backend), Next.js 15 App Router (frontend) + SQLAlchemy async, httpx, Alembic, aiosmtplib, Anthropic SDK, Voyage AI (all existing) (006-content-sync-ingest)
 - PostgreSQL 16 + pgvector (primary), GCS (transient file staging) (006-content-sync-ingest)
+- Python 3.11 (backend), TypeScript / Next.js 15 App Router (frontend) + FastAPI + SQLAlchemy async (backend); React + TanStack Query (frontend); Anthropic SDK; Voyage AI embeddings; pgvector (005-rag-chat)
+- PostgreSQL 16 + pgvector (`chat_sessions`, `chat_messages`, `content_chunks`) (005-rag-chat)
+- WeasyPrint>=62.0 (HTML/Jinja2→PDF in-memory rendering), GCS (`brand_images`, `generated-pdfs` buckets) (007-content-generation)
+- PostgreSQL (`brand_images`, `generation_requests` tables) (007-content-generation)
 
 ## Recent Changes
 - 006-content-sync-ingest: Added Python 3.11 / FastAPI (backend), Next.js 15 App Router (frontend) + SQLAlchemy async, httpx, Alembic, aiosmtplib, Anthropic SDK, Voyage AI (all existing)

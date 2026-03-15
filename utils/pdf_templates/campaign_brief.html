@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    {% include 'base.css' %}
+  </style>
+</head>
+<body>
+
+  <h1>{{ title }}</h1>
+
+  {% if images %}
+    <div class="image-block">
+      <img src="{{ images[0].data_uri }}" alt="{{ images[0].display_title }}" class="image-half" />
+      {% if images[0].display_title %}
+        <p class="image-caption">{{ images[0].display_title }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% for section in sections %}
+    <div class="section">
+      {% if section.heading %}
+        <h2>{{ section.heading }}</h2>
+      {% endif %}
+      {% for paragraph in section.content.split('\n') %}
+        {% if paragraph.strip() %}
+          {% if paragraph.strip().startswith('- ') or paragraph.strip().startswith('* ') %}
+            {# Convert markdown bullet to html list item #}
+            <p>{{ paragraph.strip()[2:] }}</p>
+          {% else %}
+            <p>{{ paragraph }}</p>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  {% if images|length > 1 %}
+    <div class="image-block">
+      <img src="{{ images[1].data_uri }}" alt="{{ images[1].display_title }}" />
+      {% if images[1].display_title %}
+        <p class="image-caption">{{ images[1].display_title }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="footer">
+    Campaign Brief — generated from approved knowledge base content.
+  </div>
+
+</body>
+</html>

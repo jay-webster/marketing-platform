@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     CHAT_MAX_TOKENS: int = 1024
     KB_INDEX_CONCURRENCY: int = 2
 
+    # Content Generation — Epic 7
+    BRAND_IMAGES_BUCKET: str = "marketing-brand-assets"
+    PDF_SIGNED_URL_EXPIRY_SECONDS: int = 86400
+    GENERATION_MODEL: str = "claude-opus-4-6"
+    GENERATION_MAX_TOKENS: int = 2048
+
     # Content Sync — Epic 6
     SYNC_INTERVAL_HOURS: int = 24
     GITHUB_MERGE_METHOD: str = "merge"

@@ -1,0 +1,109 @@
+/* Base brand styles for WeasyPrint PDF generation */
+
+@page {
+  size: A4;
+  margin: 20mm 22mm 20mm 22mm;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Liberation Sans, Arial, Helvetica, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1a1a2e;
+}
+
+h1 {
+  font-size: 22pt;
+  font-weight: 700;
+  color: #0f3460;
+  margin-bottom: 6pt;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  color: #0f3460;
+  margin-top: 16pt;
+  margin-bottom: 6pt;
+  border-bottom: 1.5pt solid #e2e8f0;
+  padding-bottom: 3pt;
+}
+
+h3 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin-top: 10pt;
+  margin-bottom: 4pt;
+}
+
+p {
+  margin-bottom: 8pt;
+}
+
+ul, ol {
+  margin-left: 18pt;
+  margin-bottom: 8pt;
+}
+
+li {
+  margin-bottom: 3pt;
+}
+
+.tagline {
+  font-size: 12pt;
+  color: #4a5568;
+  margin-bottom: 14pt;
+  font-style: italic;
+}
+
+.section {
+  margin-bottom: 14pt;
+}
+
+.image-block {
+  margin: 14pt 0;
+  text-align: center;
+}
+
+.image-block img {
+  max-width: 100%;
+  height: auto;
+}
+
+.image-caption {
+  font-size: 8pt;
+  color: #718096;
+  margin-top: 4pt;
+  text-align: center;
+}
+
+.image-half {
+  max-width: 48%;
+}
+
+.footer {
+  margin-top: 20pt;
+  padding-top: 8pt;
+  border-top: 1pt solid #e2e8f0;
+  font-size: 7.5pt;
+  color: #a0aec0;
+}
+
+.highlight-box {
+  background: #f7fafc;
+  border-left: 3pt solid #0f3460;
+  padding: 8pt 12pt;
+  margin: 10pt 0;
+}
+
+strong {
+  font-weight: 600;
+}
