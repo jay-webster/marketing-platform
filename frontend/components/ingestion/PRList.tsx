@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/layout/EmptyState"
 import type { PRItem } from "@/lib/types"
 
 interface PRListResponse {
-  data: PRItem[]
+  items: PRItem[]
   total: number
 }
 
@@ -28,7 +28,7 @@ export function PRList() {
     refetchInterval: 10000,
   })
 
-  const prs = data?.data ?? []
+  const prs = data?.items ?? []
 
   if (isLoading) {
     return (

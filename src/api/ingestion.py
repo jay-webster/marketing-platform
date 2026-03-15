@@ -751,8 +751,7 @@ async def list_open_prs(
     ]
 
     return {
-        "data": data,
-        "total": total,
+        "data": {"items": data, "total": total},
         "request_id": _request_id(request),
     }
 
