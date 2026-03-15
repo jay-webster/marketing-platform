@@ -24,6 +24,10 @@ WORKDIR /app
 # Runtime libraries only
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    libpango1.0-0 \
+    libcairo2 \
+    libffi8 \
+    fonts-liberation \
  && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder

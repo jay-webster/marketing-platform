@@ -1,5 +1,7 @@
 from src.models.base import Base
 from src.models.audit_log import AuditLog
+from src.models.brand_image import BrandImage
+from src.models.generation_request import GenerationRequest
 from src.models.chat_message import ChatMessage
 from src.models.chat_session import ChatSession
 from src.models.content_chunk import ContentChunk
@@ -20,6 +22,8 @@ from src.models.user import Role, User, UserStatus
 __all__ = [
     "Base",
     "AuditLog",
+    "BrandImage",
+    "GenerationRequest",
     "BatchStatus",
     "ChatMessage",
     "ChatSession",

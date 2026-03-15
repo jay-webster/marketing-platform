@@ -57,6 +57,43 @@ async def download_stream_from_gcs(bucket_name: str, object_name: str) -> io.Byt
     return await asyncio.to_thread(_download)
 
 
+async def upload_bytes_to_gcs(
+    data: bytes,
+    bucket_name: str,
+    object_name: str,
+    content_type: str,
+) -> str:
+    """Upload raw bytes to GCS without a local disk write. Returns object_name."""
+    def _upload() -> str:
+        client = _get_client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        blob.upload_from_string(data, content_type=content_type)
+        return object_name
+
+    return await asyncio.to_thread(_upload)
+
+
+async def generate_signed_url(
+    bucket_name: str,
+    object_name: str,
+    expiry_seconds: int,
+) -> str:
+    """Generate a V4 signed URL for direct client download."""
+    import datetime as dt
+
+    def _sign() -> str:
+        client = _get_client()
+        blob = client.bucket(bucket_name).blob(object_name)
+        return blob.generate_signed_url(
+            version="v4",
+            expiration=dt.timedelta(seconds=expiry_seconds),
+            method="GET",
+        )
+
+    return await asyncio.to_thread(_sign)
+
+
 async def delete_from_gcs(bucket_name: str, object_name: str) -> None:
     """Delete a GCS object. Idempotent — silences NotFound."""
     def _delete() -> None:

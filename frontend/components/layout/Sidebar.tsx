@@ -10,6 +10,7 @@ import {
   GitBranch,
   Users,
   LogOut,
+  Sparkles,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -20,6 +21,7 @@ import type { AuthUser } from "@/lib/types"
 const ADMIN_NAV_LINKS = [
   { href: "/",          label: "Dashboard", icon: LayoutDashboard, exact: true  },
   { href: "/chat",      label: "Chat",      icon: MessageSquare,   exact: false },
+  { href: "/generate",  label: "Generate",  icon: Sparkles,        exact: false },
   { href: "/content",   label: "Content",   icon: FileText,        exact: false },
   { href: "/ingestion", label: "Ingestion", icon: Upload,          exact: false },
   { href: "/github",    label: "GitHub",    icon: GitBranch,       exact: false },
@@ -29,6 +31,7 @@ const ADMIN_NAV_LINKS = [
 // Non-admin nav: Chat is the primary entry point
 const MARKETER_NAV_LINKS = [
   { href: "/chat",      label: "Chat",      icon: MessageSquare,   exact: false },
+  { href: "/generate",  label: "Generate",  icon: Sparkles,        exact: false },
   { href: "/content",   label: "Content",   icon: FileText,        exact: false },
   { href: "/ingestion", label: "Ingestion", icon: Upload,          exact: false },
 ] as const

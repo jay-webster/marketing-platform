@@ -214,6 +214,41 @@ export interface GitHubConnection {
   token_on_file: boolean;
 }
 
+// Content Generation
+export type OutputType = "email" | "linkedin" | "pdf"
+
+export interface GenerationResult {
+  subject?: string       // email only
+  body?: string          // email only
+  post_text?: string     // linkedin only
+  hashtags?: string[]    // linkedin only
+  pdf_url?: string       // pdf only
+  pdf_filename?: string  // pdf only
+}
+
+export interface GenerationRequest {
+  id: string
+  output_type: OutputType
+  status: "completed" | "failed" | "pending"
+  prompt: string
+  result?: GenerationResult
+  failure_reason?: string
+  pdf_url?: string       // list view: signed URL (pdf only)
+  created_at: string
+}
+
+export interface BrandImage {
+  id: string
+  filename: string
+  display_title: string
+  content_type: string
+  source: "github_sync" | "admin_upload"
+  thumbnail_url: string
+  created_at: string
+}
+
+export type PDFTemplate = "one_pager" | "campaign_brief"
+
 // Shared / API Envelope
 export interface APIError {
   detail: string;

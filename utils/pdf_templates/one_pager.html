@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    {% include 'base.css' %}
+  </style>
+</head>
+<body>
+
+  <h1>{{ title }}</h1>
+  {% if tagline %}
+    <p class="tagline">{{ tagline }}</p>
+  {% endif %}
+
+  {% for section in sections %}
+    <div class="section">
+      {% if section.heading %}
+        <h2>{{ section.heading }}</h2>
+      {% endif %}
+      {% for paragraph in section.content.split('\n') %}
+        {% if paragraph.strip() %}
+          <p>{{ paragraph }}</p>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  {% if images %}
+    <div class="image-block">
+      <img src="{{ images[0].data_uri }}" alt="{{ images[0].display_title }}" />
+      {% if images[0].display_title %}
+        <p class="image-caption">{{ images[0].display_title }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="footer">
+    Generated from approved knowledge base content.
+  </div>
+
+</body>
+</html>
