@@ -29,10 +29,7 @@ def _patch_workers():
 
 
 def _admin_headers(bearer: str) -> dict:
-    return {
-        "Authorization": f"Bearer {bearer}",
-        "X-Admin-Token": VALID_ADMIN_TOKEN,
-    }
+    return {"Authorization": f"Bearer {bearer}"}
 
 
 async def _create_kb_doc(db: AsyncSession, status: str = KBIndexStatus.INDEXED.value) -> KnowledgeBaseDocument:
@@ -88,25 +85,12 @@ async def test_kb_status_unauthenticated(async_client: AsyncClient):
 
 
 @_async
-async def test_kb_status_requires_admin_token(async_client: AsyncClient, admin_token: str):
-    """Valid bearer but no X-Admin-Token → 403."""
-    with _patch_workers(), patch.object(settings, "ADMIN_TOKEN", VALID_ADMIN_TOKEN):
+async def test_kb_status_non_admin_forbidden(async_client: AsyncClient, marketer_token: str):
+    """Non-admin bearer → 403."""
+    with _patch_workers():
         response = await async_client.get(
             "/api/v1/admin/knowledge-base/status",
-            headers={"Authorization": f"Bearer {admin_token}"},
-        )
-    assert response.status_code == 403
-
-
-@_async
-async def test_kb_status_wrong_admin_token(async_client: AsyncClient, admin_token: str):
-    with _patch_workers(), patch.object(settings, "ADMIN_TOKEN", VALID_ADMIN_TOKEN):
-        response = await async_client.get(
-            "/api/v1/admin/knowledge-base/status",
-            headers={
-                "Authorization": f"Bearer {admin_token}",
-                "X-Admin-Token": "wrong-token",
-            },
+            headers={"Authorization": f"Bearer {marketer_token}"},
         )
     assert response.status_code == 403
 
@@ -153,12 +137,12 @@ async def test_reindex_unauthenticated(async_client: AsyncClient):
 
 
 @_async
-async def test_reindex_requires_admin_token(async_client: AsyncClient, admin_token: str):
-    """Valid bearer but no X-Admin-Token → 403."""
-    with _patch_workers(), patch.object(settings, "ADMIN_TOKEN", VALID_ADMIN_TOKEN):
+async def test_reindex_non_admin_forbidden(async_client: AsyncClient, marketer_token: str):
+    """Non-admin bearer → 403."""
+    with _patch_workers():
         response = await async_client.post(
             "/api/v1/admin/knowledge-base/reindex",
-            headers={"Authorization": f"Bearer {admin_token}"},
+            headers={"Authorization": f"Bearer {marketer_token}"},
         )
     assert response.status_code == 403
 
