@@ -1,7 +1,10 @@
 """Chat API endpoints — RAG-powered conversation interface."""
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -277,6 +280,7 @@ async def _sse_stream(db, session, user_message, history, document_title):
                 })
 
     except Exception as exc:
+        logger.exception("SSE stream error for session %s: %s", session.id, exc)
         yield _sse_event("error", {"message": "An error occurred processing your request."})
 
 
