@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
 
@@ -8,8 +7,8 @@ async function handler(
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   const { path } = await params
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth-token")?.value
+  // Read auth token directly from the incoming request cookies (same as middleware)
+  const token = request.cookies.get("auth-token")?.value
 
   const searchParams = request.nextUrl.searchParams.toString()
   const backendUrl = `${BACKEND_URL}/api/v1/${path.join("/")}${searchParams ? `?${searchParams}` : ""}`
@@ -25,13 +24,15 @@ async function handler(
 
   const isBodyMethod = !["GET", "HEAD", "DELETE"].includes(request.method)
 
+  // Read body as text to avoid ReadableStream duplex streaming issues
+  const body = isBodyMethod ? await request.text() : undefined
+
   let backendResponse: Response
   try {
     backendResponse = await fetch(backendUrl, {
       method: request.method,
       headers: forwardedHeaders,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(isBodyMethod ? { body: request.body, duplex: "half" } as any : {}),
+      ...(body !== undefined ? { body } : {}),
     })
   } catch {
     return NextResponse.json(
