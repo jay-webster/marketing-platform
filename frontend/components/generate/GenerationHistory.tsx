@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ApiError } from "@/lib/api"
+
 import type { GenerationRequest, OutputType } from "@/lib/types"
 
 const OUTPUT_TYPE_LABELS: Record<OutputType, string> = {
@@ -36,13 +36,9 @@ export function GenerationHistory({ onSelect, onRegenerate }: GenerationHistoryP
     try {
       const res = await fetch(`/api/v1/generate/?limit=${limit}&offset=${currentOffset}`)
       if (!res.ok) {
-        if (res.status === 401 && typeof window !== "undefined") {
-          window.location.href = "/login"
-          return
-        }
         const body = await res.json().catch(() => ({}))
         const raw = (body as Record<string, unknown>).detail ?? (body as Record<string, unknown>).error
-        throw new ApiError(res.status, typeof raw === "string" ? raw : `Request failed (${res.status})`)
+        throw new Error(typeof raw === "string" ? raw : `Request failed (${res.status})`)
       }
       const json = await res.json()
       if (currentOffset === 0) {
@@ -52,7 +48,7 @@ export function GenerationHistory({ onSelect, onRegenerate }: GenerationHistoryP
       }
       setTotal(json.total)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not load generation history.")
+      setError(err instanceof Error ? err.message : "Could not load generation history.")
     } finally {
       setIsLoading(false)
     }
@@ -65,10 +61,6 @@ export function GenerationHistory({ onSelect, onRegenerate }: GenerationHistoryP
   async function handleDelete(id: string) {
     if (!window.confirm("Delete this generated item? This cannot be undone.")) return
     const res = await fetch(`/api/v1/generate/${id}`, { method: "DELETE" })
-    if (res.status === 401 && typeof window !== "undefined") {
-      window.location.href = "/login"
-      return
-    }
     if (res.ok) {
       setItems((prev) => prev.filter((item) => item.id !== id))
       setTotal((t) => t - 1)
